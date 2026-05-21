@@ -2,7 +2,7 @@ include config.mk
 
 -include oniecraft.conf
 
-.PHONY: all rootfs kernel packages image vm-create vm-install vm-run vm-test vm-test-quick clean distclean help
+.PHONY: all rootfs kernel packages image imagecraft vm-create vm-install vm-run vm-test vm-test-quick clean distclean help
 
 all: image
 
@@ -15,6 +15,7 @@ help:
 	@echo "  kernel    - Build or prepare the kernel"
 	@echo "  packages  - Install additional packages"
 	@echo "  image     - Package into ONIE installer image"
+	@echo "  imagecraft - Build ONIE installer image using imagecraft"
 	@echo "  clean     - Remove build artifacts (keep downloads)"
 	@echo "  distclean - Remove everything including downloads"
 	@echo ""
@@ -166,3 +167,14 @@ vm-test-quick:
 		--firmware "$(VM_FIRMWARE)" \
 		--kvm-port "$(VM_KVM_PORT)" \
 		--ssh-port "$(VM_SSH_PORT)"
+
+imagecraft:
+	$(Q)echo "==== Building ONIE installer image with imagecraft ===="
+	$(Q)scripts/build-with-imagecraft.sh \
+		--arch "$(ARCH)" \
+		--bootloader "$(BOOTLOADER)" \
+		--nos-name "$(NOS_NAME)" \
+		--nos-version "$(NOS_VERSION)" \
+		--part-size "$(PART_SIZE_MB)" \
+		--kernel-dir "$(KERNEL_DIR)" \
+		--output "$(BUILDDIR)/$(IMAGE_NAME)"

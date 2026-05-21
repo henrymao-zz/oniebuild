@@ -1,0 +1,122 @@
+name: oniecraft
+base: bare
+build-base: ubuntu@22.04
+version: '1.0.0'
+summary: ONIECraft NOS image
+description: |
+  ONIECraft Network Operating System image for ONIE-compatible switches.
+
+platforms:
+  amd64:
+
+volumes:
+  pc:
+    schema: gpt
+    structure:
+      - name: rootfs
+        type: 0FC63DAF-8483-4772-8E79-3D69D8477DE4
+        filesystem: ext4
+        filesystem-label: writable
+        role: system-data
+        size: 4G
+
+filesystems:
+  default:
+    - mount: /
+      device: (volume/pc/rootfs)
+
+parts:
+  rootfs:
+    plugin: nil
+    build-packages:
+      - mmdebstrap
+    override-build: |
+      mmdebstrap --arch $CRAFT_ARCH_BUILD_FOR \
+        --mode=sudo \
+        --format=dir \
+        --variant=minbase \
+        --include=apt,systemd,systemd-sysv,systemd-resolved,dbus,iproute2,iputils-ping,openssh-server,sudo,less,kmod,initramfs-tools,ca-certificates,curl,gpg,locales,logrotate,zstd \
+        noble \
+        $CRAFT_PART_INSTALL/ \
+        http://archive.ubuntu.com/ubuntu/
+      rm -r $CRAFT_PART_INSTALL/dev/*
+      mkdir -p $CRAFT_PART_INSTALL/boot/efi
+      cat << EOF > $CRAFT_PART_INSTALL/etc/apt/sources.list.d/ubuntu.sources
+      Types: deb deb-src
+      URIs: http://archive.ubuntu.com/ubuntu
+      Suites: noble noble-updates noble-backports noble-security
+      Components: main universe
+      Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+      EOF
+    organize:
+      '*': (overlay)/
+
+  packages:
+    plugin: nil
+    after: [rootfs]
+    overlay-packages:
+      - linux-image-generic
+
+  config:
+    plugin: nil
+    after: [packages]
+    overlay-script: |
+      echo "Ubuntu" > $CRAFT_OVERLAY/etc/hostname
+      echo "127.0.0.1 localhost Ubuntu" > $CRAFT_OVERLAY/etc/hosts
+
+      echo "root:root" | chpasswd --root "$CRAFT_OVERLAY" || \
+        echo "root:root" | chroot "$CRAFT_OVERLAY" chpasswd
+
+      chroot "$CRAFT_OVERLAY" systemctl enable ssh
+      chroot "$CRAFT_OVERLAY" systemctl enable systemd-resolved
+      chroot "$CRAFT_OVERLAY" systemctl enable systemd-networkd
+
+      cat > $CRAFT_OVERLAY/etc/apt/apt.conf.d/81norecommends << 'APT_EOF'
+      APT::Install-Recommends "0";
+      APT::Install-Suggests "0";
+      APT_EOF
+
+      cat > $CRAFT_OVERLAY/etc/apt/apt.conf.d/no-languages << 'APT_EOF'
+      Acquire::Languages "none";
+      APT_EOF
+
+      cat > $CRAFT_OVERLAY/etc/os-release << 'OS_EOF'
+      NAME="Ubuntu"
+      VERSION="1.0.0"
+      ID=Ubuntu
+      ID_LIKE=debian
+      VERSION_ID="1.0.0"
+      PRETTY_NAME="Ubuntu 1.0.0"
+      HOME_URL="https://github.com/example/oniecraft"
+      SUPPORT_URL="https://github.com/example/oniecraft"
+      BUG_REPORT_URL="https://github.com/example/oniecraft/issues"
+      OS_EOF
+
+      mkdir -p $CRAFT_OVERLAY/lib/Ubuntu
+      cat > $CRAFT_OVERLAY/lib/Ubuntu/machine.conf << 'MC_EOF'
+      machine=Ubuntu
+      platform=Ubuntu-x86_64
+      nos_name=Ubuntu
+      nos_version=1.0.0
+      nos_arch=x86_64
+      MC_EOF
+
+  netplan:
+    plugin: nil
+    after: [packages]
+    overlay-script: |
+      mkdir -p $CRAFT_OVERLAY/etc/netplan
+      cat > $CRAFT_OVERLAY/etc/netplan/01-netcfg.yaml << 'NETPLAN_EOF'
+      network:
+        version: 2
+        renderer: networkd
+        ethernets:
+          eth0:
+            dhcp4: true
+            match:
+              name: "eth0"
+          ens3:
+            dhcp4: true
+            match:
+              name: "ens3"
+      NETPLAN_EOF

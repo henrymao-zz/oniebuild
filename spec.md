@@ -9,7 +9,7 @@ ONIECraft generates ONIE-compatible self-extracting installer images for network
 - **Makefile-driven**: GNU Make with stamp-file tracking for incremental builds
 - **Shell scripts**: All build logic lives in `scripts/` as bash scripts with `set -euo pipefail`
 - **Configuration**: Defaults in `config.mk`, overridden by `oniecraft.conf` or environment variables
-- **Build targets**: `all` (default), `rootfs`, `kernel`, `packages`, `image`, `vm-create`, `vm-install`, `vm-run`, `vm-test`, `vm-test-quick`, `clean`, `distclean`
+- **Build targets**: `all` (default), `rootfs`, `kernel`, `packages`, `image`, `imagecraft`, `vm-create`, `vm-install`, `vm-run`, `vm-test`, `vm-test-quick`, `clean`, `distclean`
 
 ## Architecture Support
 
@@ -59,6 +59,22 @@ Installs additional packages from two sources:
 - Wraps archive in self-extracting shell script (`installer/sharch_body.sh`) with SHA1 verification
 - Output: `$NOS_NAME-$NOS_VERSION-$ARCH-installer.bin`
 
+### 5. Imagecraft Build (`make imagecraft`)
+
+Alternative build pipeline using [imagecraft](https://github.com/canonical/imagecraft) for rootfs creation instead of debootstrap:
+
+- **imagecraft.yaml**: Manifest defining the image build:
+  - `nil` plugin with `override-build` calling `mmdebstrap` directly (mmdebstrap plugin not registered in imagecraft 0.1.0)
+  - `overlay-packages` installs `linux-image-generic`
+  - `overlay-script` parts configure hostname, root password, services, apt, os-release, machine.conf, netplan
+  - `build-base: ubuntu@22.04` required for destructive mode on 22.04 host
+- **scripts/build-with-imagecraft.sh**: Post-processing script that:
+  - Runs `imagecraft pack --destructive-mode`
+  - Extracts rootfs from `pc.img` disk image via loop mount
+  - Packages rootfs into ONIE installer `.bin` (same format as debootstrap pipeline)
+- **Install**: `sudo snap install imagecraft --channel=beta --classic`
+- Both pipelines produce identical ONIE installer format; `imagecraft` is an alternative to `make image`
+
 ## Installer Runtime
 
 The self-extracting `.bin` installer:
@@ -106,12 +122,14 @@ The self-extracting `.bin` installer:
 oniecraft/
   Makefile              # Top-level build orchestration
   config.mk             # Default configuration values
+  imagecraft.yaml       # imagecraft manifest (alternative build pipeline)
   oniecraft.conf.example # Example user config
   scripts/
-    build-rootfs.sh     # Root filesystem bootstrap
+    build-rootfs.sh     # Root filesystem bootstrap (debootstrap)
     build-kernel.sh     # Kernel build/install
     build-packages.sh   # Additional package installation
     mk-installer.sh     # ONIE installer image creation
+    build-with-imagecraft.sh # imagecraft-based build pipeline
     build-vm.sh         # KVM VM creation and NOS installation
   installer/
     sharch_body.sh      # Self-extracting shell archive template
@@ -120,9 +138,7 @@ oniecraft/
       grub.cfg
     u-boot-arch/        # U-Boot bootloader installer (ARM)
       install.sh
-  overlay/              # Filesystem overlay (rsync'd into rootfs)
-    etc/ssh/sshd_config.d/
-      root-login.conf   # Enable root SSH login for development
+  overlay/              # Filesystem overlay (rsync'd into rootfs, debootstrap pipeline)
   packages/
     debs/               # Pre-built .deb packages
     source/             # Source packages to build
@@ -166,7 +182,7 @@ Automated KVM-based testing pipeline inspired by [SONiC's build_kvm_image.sh](ht
 - **Serial console mode**: QEMU uses `server` mode (not `nowait`) so expect connects before GRUB's 3-second timeout expires
 - **ONIE updater completion**: Detected by monitoring `/var/log/onie.log` for `"ONIE: Success: Firmware update"`
 - **GRUB linux command line**: Includes `root=LABEL=ONIE-DEMO-OS` so the kernel can find the root filesystem
-- **SSH verification**: Root login enabled via overlay (`/etc/ssh/sshd_config.d/root-login.conf`), root password is `root`
+- **SSH verification**: Reverted — serial console expect-based verification is sufficient and reliable
 
 ### Example
 
@@ -174,8 +190,11 @@ Automated KVM-based testing pipeline inspired by [SONiC's build_kvm_image.sh](ht
 # Set ONIE ISO path
 export ONIE_ISO=/path/to/onie-recovery-x86_64-kvm_x86_64-r0.iso
 
-# Build + test in one command
+# Build + test in one command (debootstrap pipeline)
 make image vm-test
+
+# Or using imagecraft pipeline
+make imagecraft vm-test
 
 # Or step-by-step
 make vm-create
