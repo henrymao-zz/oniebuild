@@ -19,6 +19,7 @@ KERNEL_VERSION ?=
 INCLUDE_DEBS ?=
 INCLUDE_SOURCE_PKGS ?=
 
+ONIE_ISO_URL ?= https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64-r0.iso
 ONIE_ISO ?= $(BUILDDIR)/vm/onie-recovery-x86_64-kvm_x86_64-r0.iso
 VM_MEM ?= 2048
 VM_DISK_SIZE ?= 40

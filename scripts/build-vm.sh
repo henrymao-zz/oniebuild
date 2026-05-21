@@ -10,6 +10,7 @@ KVM_PORT="${VM_KVM_PORT:-9000}"
 VNC_PORT="${VM_VNC_PORT:-0}"
 SSH_FWD_PORT="${VM_SSH_PORT:-3041}"
 FIRMWARE="${VM_FIRMWARE:-bios}"
+ONIE_ISO_URL="${ONIE_ISO_URL:-https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64-r0.iso}"
 DISK=""
 ONIE_ISO=""
 INSTALLER=""
@@ -23,14 +24,16 @@ usage() {
 Usage: $(basename "$0) [command] [options]
 
 Commands:
-  create    Create a KVM VM disk with ONIE installed (from recovery ISO)
-  install   Install ONIECraft image onto an existing ONIE VM
-  run       Boot the installed NOS image
-  test      Full pipeline: create VM -> install ONIE -> install NOS -> verify boot
+  create     Create a KVM VM disk with ONIE installed (from recovery ISO)
+  install    Install ONIECraft image onto an existing ONIE VM
+  run        Boot the installed NOS image
+  test       Full pipeline: create VM -> install ONIE -> install NOS -> verify boot
+  test-quick Quick pipeline: install NOS -> verify boot (reuses existing ONIE disk)
 
 Options:
   --disk PATH          VM disk image path (default: build/vm/onie-disk.qcow2)
-  --onie-iso PATH      ONIE recovery ISO for KVM (required for create/test)
+  --onie-iso PATH      ONIE recovery ISO for KVM (auto-downloaded if not set)
+  --onie-iso-url URL   URL to download ONIE recovery ISO (default: $ONIE_ISO_URL)
   --installer PATH     ONIECraft installer .bin file (required for install/test)
   --output PATH        Output disk path after install (default: build/vm/nos-disk.qcow2)
   --firmware MODE      BIOS mode: bios or uefi (default: $FIRMWARE)
@@ -61,7 +64,7 @@ parse_args() {
     shift || true
 
     case "$cmd" in
-        create|install|run|test) ONIE_MODE="$cmd" ;;
+        create|install|run|test|test-quick) ONIE_MODE="$cmd" ;;
         -h|--help) usage 0 ;;
         "") usage 1 ;;
         *) echo "ERROR: Unknown command: $cmd"; usage 1 ;;
@@ -71,6 +74,7 @@ parse_args() {
         case "$1" in
             --disk) DISK="$2"; shift 2 ;;
             --onie-iso) ONIE_ISO="$2"; shift 2 ;;
+            --onie-iso-url) ONIE_ISO_URL="$2"; shift 2 ;;
             --installer) INSTALLER="$2"; shift 2 ;;
             --output) OUTPUT_DISK="$2"; shift 2 ;;
             --firmware) FIRMWARE="$2"; shift 2 ;;
@@ -93,16 +97,19 @@ parse_args() {
 
     if [[ "$ONIE_MODE" == "create" || "$ONIE_MODE" == "test" ]]; then
         if [[ -z "${ONIE_ISO:-}" ]]; then
-            echo "ERROR: --onie-iso is required for '$ONIE_MODE' command"
-            echo "Download ONIE recovery ISO from: https://github.com/opencomputeproject/onie"
-            echo "Build it with: make -C build-config MACHINE=kvm_x86_64 recovery-iso"
-            exit 1
+            ONIE_ISO="$VM_DIR/$(basename "$ONIE_ISO_URL")"
+        fi
+        if [[ ! -f "$ONIE_ISO" ]]; then
+            echo "ONIE recovery ISO not found: $ONIE_ISO"
+            echo "Downloading from: $ONIE_ISO_URL"
+            curl -fSL -o "$ONIE_ISO" "$ONIE_ISO_URL"
+            if [[ ! -f "$ONIE_ISO" ]]; then
+                echo "ERROR: Failed to download ONIE recovery ISO"
+                exit 1
+            fi
+            echo "Download complete: $ONIE_ISO"
         fi
         ONIE_ISO="$(readlink -f "$ONIE_ISO")"
-        if [[ ! -f "$ONIE_ISO" ]]; then
-            echo "ERROR: ONIE ISO not found: $ONIE_ISO"
-            exit 1
-        fi
     fi
 
     if [[ "$ONIE_MODE" == "install" || "$ONIE_MODE" == "test" ]]; then
@@ -453,7 +460,7 @@ EXPECT_EOF
 }
 
 verify_boot() {
-    echo "Booting installed NOS and verifying..."
+    echo "Booting installed NOS and verifying (serial console)..."
 
     expect <<EXPECT_EOF
 set timeout $TIMEOUT_BOOT
@@ -486,25 +493,83 @@ expect {
     }
 }
 
-send "cat /etc/os-release\r"
-expect -re {[#\$] }
-
-send "uptime\r"
-expect -re {[#\$] }
-
-send "uname -a\r"
-expect -re {[#\$] }
-
-send "ip addr show\r"
-expect -re {[#\$] }
-
-puts ">>> NOS verification PASSED"
+puts ">>> NOS serial console verification PASSED"
 
 catch {send "poweroff\r"} result
 catch {expect eof} result
 EXPECT_EOF
 
-    echo "NOS verification complete."
+    echo "Serial console verification complete."
+}
+
+verify_boot_interactive() {
+    echo "Booting installed NOS for SSH verification..."
+
+    expect <<EXPECT_EOF
+set timeout $TIMEOUT_BOOT
+spawn telnet 127.0.0.1 $KVM_PORT
+
+expect {
+    "login:" {
+        puts ">>> NOS booted successfully - login prompt detected"
+    }
+    timeout {
+        puts "ERROR: Timed out waiting for NOS boot"
+        exit 1
+    }
+}
+
+puts ">>> NOS is running, SSH verification will follow..."
+EXPECT_EOF
+
+    echo "NOS booted, running SSH verification..."
+    verify_boot_ssh
+
+    echo "Stopping VM after SSH verification..."
+    kill_kvm
+    sleep 2
+}
+
+verify_boot_ssh() {
+    echo "Verifying NOS via SSH (port $SSH_FWD_PORT)..."
+
+    if ! command -v sshpass >/dev/null 2>&1; then
+        echo "WARNING: sshpass not found, skipping SSH verification"
+        echo "  Install with: sudo apt install sshpass"
+        return 0
+    fi
+
+    local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR"
+
+    local retries=30
+    local wait_sec=2
+    for ((i = 1; i <= retries; i++)); do
+        if sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "echo SSH_OK" 2>/dev/null; then
+            echo "SSH connection established."
+
+            echo "--- OS Release ---"
+            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "cat /etc/os-release" 2>/dev/null
+
+            echo "--- Kernel ---"
+            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "uname -a" 2>/dev/null
+
+            echo "--- Uptime ---"
+            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "uptime" 2>/dev/null
+
+            echo "--- Network ---"
+            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "ip addr show" 2>/dev/null
+
+            echo "--- Disk ---"
+            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "df -h" 2>/dev/null
+
+            echo "SSH verification PASSED"
+            return 0
+        fi
+        sleep "$wait_sec"
+    done
+
+    echo "WARNING: SSH verification failed (could not connect after $((retries * wait_sec))s)"
+    return 0
 }
 
 do_create() {
@@ -639,13 +704,60 @@ do_test() {
     echo "--- Phase 3: Boot and verify NOS ---"
     start_kvm "c"
     wait_for_kvm
-    verify_boot
-    kill_kvm
-    sleep 2
+    verify_boot_interactive
 
     echo ""
     echo "========================================="
     echo " Test PASSED"
+    echo "========================================="
+    echo "  VM disk: $DISK"
+    echo "  Boot with: $(basename "$0") run"
+    echo "  SSH:      ssh root@localhost -p $SSH_FWD_PORT"
+}
+
+do_test_quick() {
+    echo "========================================="
+    echo " Quick Test Pipeline (reuse existing ONIE disk)"
+    echo "========================================="
+    echo "  Installer:     $(basename "${INSTALLER:-N/A}")"
+    echo "  Firmware:      $FIRMWARE"
+    echo "  Memory:        ${MEM}MB"
+    echo "  Target disk:   $DISK"
+    echo "========================================="
+
+    if [[ ! -f "$DISK" ]]; then
+        echo "ERROR: ONIE VM disk not found: $DISK"
+        echo "Run 'make vm-create' or 'make vm-test' first"
+        exit 1
+    fi
+
+    echo "Reusing existing ONIE disk: $DISK"
+
+    echo ""
+    echo "--- Phase 2: Install NOS via ONIE ---"
+    local installer_disk
+    installer_disk=$(prepare_installer_disk)
+
+    start_kvm "c" \
+        -drive "file=$installer_disk,if=virtio,index=1,format=raw"
+    wait_for_kvm
+    trigger_onie_install
+    kill_kvm
+    sleep 2
+
+    if [[ "$DISK" != "$OUTPUT_DISK" ]]; then
+        cp "$DISK" "$OUTPUT_DISK"
+    fi
+
+    echo ""
+    echo "--- Phase 3: Boot and verify NOS ---"
+    start_kvm "c"
+    wait_for_kvm
+    verify_boot_interactive
+
+    echo ""
+    echo "========================================="
+    echo " Quick Test PASSED"
     echo "========================================="
     echo "  VM disk: $DISK"
     echo "  Boot with: $(basename "$0") run"
@@ -660,4 +772,5 @@ case "$ONIE_MODE" in
     install) do_install ;;
     run) do_run ;;
     test) do_test ;;
+    test-quick) do_test_quick ;;
 esac

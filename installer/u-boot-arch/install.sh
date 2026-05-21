@@ -31,7 +31,7 @@ hw_load_str="$(hw_load)"
 echo "Updating U-Boot environment variables"
 (cat <<EOF
 hw_load $hw_load_str
-copy_img echo "Loading Demo $platform image..." && run hw_load
+copy_img echo "Loading Ubuntu NOS $platform image..." && run hw_load
 nos_bootcmd run copy_img && setenv bootargs quiet console=\$consoledev,\$baudrate && bootm \$loadaddr
 EOF
 ) > /tmp/env.txt

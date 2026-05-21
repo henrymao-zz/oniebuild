@@ -44,10 +44,13 @@
 
 # --- VM Testing ---
 
-# Path to ONIE recovery ISO for KVM x86_64 (required for vm-create/vm-test)
+# Path to ONIE recovery ISO for KVM x86_64 (auto-downloaded if not set)
 # Build from https://github.com/opencomputeproject/onie with:
 #   make -C build-config MACHINE=kvm_x86_64 recovery-iso
 # ONIE_ISO = /path/to/onie-recovery-x86_64-kvm_x86_64-r0.iso
+
+# URL for auto-downloading ONIE recovery ISO
+# ONIE_ISO_URL = https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64-r0.iso
 
 # VM memory in MB
 # VM_MEM = 2048

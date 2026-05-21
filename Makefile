@@ -2,7 +2,7 @@ include config.mk
 
 -include oniecraft.conf
 
-.PHONY: all rootfs kernel packages image vm-create vm-install vm-run vm-test clean distclean help
+.PHONY: all rootfs kernel packages image vm-create vm-install vm-run vm-test vm-test-quick clean distclean help
 
 all: image
 
@@ -38,6 +38,7 @@ help:
 	@echo "  vm-install  - Install ONIECraft image onto existing ONIE VM"
 	@echo "  vm-run      - Boot the installed NOS image in the VM"
 	@echo "  vm-test     - Full pipeline: create -> install NOS -> verify boot"
+	@echo "  vm-test-quick - Quick pipeline: install NOS -> verify boot (reuses ONIE disk)"
 	@echo ""
 	@echo "VM Configuration:"
 	@echo "  ONIE_ISO    - Path to ONIE recovery ISO (KVM x86_64) [$(ONIE_ISO)]"
@@ -120,7 +121,8 @@ distclean: clean
 
 vm-create:
 	$(Q)scripts/build-vm.sh create \
-		$(if $(ONIE_ISO),--onie-iso "$(ONIE_ISO)") \
+		--onie-iso "$(ONIE_ISO)" \
+		--onie-iso-url "$(ONIE_ISO_URL)" \
 		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
 		--mem "$(VM_MEM)" \
 		--disk-size "$(VM_DISK_SIZE)" \
@@ -146,11 +148,21 @@ vm-run:
 
 vm-test:
 	$(Q)scripts/build-vm.sh test \
-		$(if $(ONIE_ISO),--onie-iso "$(ONIE_ISO)") \
+		--onie-iso "$(ONIE_ISO)" \
+		--onie-iso-url "$(ONIE_ISO_URL)" \
 		--installer "$(BUILDDIR)/$(IMAGE_NAME)" \
 		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
 		--mem "$(VM_MEM)" \
 		--disk-size "$(VM_DISK_SIZE)" \
+		--firmware "$(VM_FIRMWARE)" \
+		--kvm-port "$(VM_KVM_PORT)" \
+		--ssh-port "$(VM_SSH_PORT)"
+
+vm-test-quick:
+	$(Q)scripts/build-vm.sh test-quick \
+		--installer "$(BUILDDIR)/$(IMAGE_NAME)" \
+		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
+		--mem "$(VM_MEM)" \
 		--firmware "$(VM_FIRMWARE)" \
 		--kvm-port "$(VM_KVM_PORT)" \
 		--ssh-port "$(VM_SSH_PORT)"

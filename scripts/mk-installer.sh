@@ -201,14 +201,6 @@ sudo mksquashfs "$ROOTFS" "$TMP_DIR/fs.squashfs" -comp xz -b 1M -e boot -e var/c
 INSTALLER_TMP="$TMP_DIR/installer"
 mkdir -p "$INSTALLER_TMP"
 
-BOOT_DIR="$INSTALLER_TMP/boot"
-mkdir -p "$BOOT_DIR"
-sudo cp "$VMLINUZ" "$BOOT_DIR/vmlinuz-$KVER"
-sudo cp "$INITRD" "$BOOT_DIR/initrd.img-$KVER"
-sudo chmod a+r "$BOOT_DIR/vmlinuz-$KVER" "$BOOT_DIR/initrd.img-$KVER"
-ln -sf "vmlinuz-$KVER" "$BOOT_DIR/vmlinuz"
-ln -sf "initrd.img-$KVER" "$BOOT_DIR/initrd.img"
-
 sudo cp "$VMLINUZ" "$INSTALLER_TMP/demo.vmlinuz"
 sudo cp "$INITRD" "$INSTALLER_TMP/demo.initrd"
 sudo chmod a+r "$INSTALLER_TMP/demo.vmlinuz" "$INSTALLER_TMP/demo.initrd"

@@ -9,7 +9,7 @@ ONIECraft generates ONIE-compatible self-extracting installer images for network
 - **Makefile-driven**: GNU Make with stamp-file tracking for incremental builds
 - **Shell scripts**: All build logic lives in `scripts/` as bash scripts with `set -euo pipefail`
 - **Configuration**: Defaults in `config.mk`, overridden by `oniecraft.conf` or environment variables
-- **Build targets**: `all` (default), `rootfs`, `kernel`, `packages`, `image`, `vm-create`, `vm-install`, `vm-run`, `vm-test`, `clean`, `distclean`
+- **Build targets**: `all` (default), `rootfs`, `kernel`, `packages`, `image`, `vm-create`, `vm-install`, `vm-run`, `vm-test`, `vm-test-quick`, `clean`, `distclean`
 
 ## Architecture Support
 
@@ -54,8 +54,8 @@ Installs additional packages from two sources:
 - Strips rootfs: removes docs, locales, manpages, headers, debug firmware, `.pyc` files, `.a`/`.la` files
 - Optimizes kernel modules: zstd recompression at level 19, strip debug symbols
 - Strips user-space binaries
-- Creates squashfs of rootfs (zstd-19, excluding `/boot` and APT caches)
-- Packages `vmlinuz`, `initrd.img`, `fs.squashfs`, `install.sh`, `machine.conf` into installer archive
+- Creates squashfs of rootfs (xz compression, excluding `/boot` and APT caches)
+- Packages `demo.vmlinuz`, `demo.initrd`, `fs.squashfs`, `install.sh`, `machine.conf` into installer archive
 - Wraps archive in self-extracting shell script (`installer/sharch_body.sh`) with SHA1 verification
 - Output: `$NOS_NAME-$NOS_VERSION-$ARCH-installer.bin`
 
@@ -65,13 +65,13 @@ The self-extracting `.bin` installer:
 1. Verifies its SHA1 checksum
 2. Extracts to tmpfs (if root)
 3. Runs `install.sh` which:
-   - Detects ONIE boot device (`ONIE-BOOT` label)
-   - Creates/overwrites NOS partition (GPT or MSDOS, configurable size)
-   - Formats as ext4 with label `ONIE-DEMO-OS`
-   - Copies kernel + initrd to target
-   - Installs squashfs rootfs via overlay mount + copy
-   - Configures bootloader (GRUB for x86_64 UEFI/BIOS, U-Boot env for ARM)
-   - Switches ONIE to NOS mode
+    - Detects ONIE boot device (`ONIE-BOOT` label)
+    - Creates/overwrites NOS partition (GPT or MSDOS, configurable size)
+    - Formats as ext4 with label `ONIE-DEMO-OS`
+    - Copies kernel (`demo.vmlinuz`) + initrd (`demo.initrd`) to target with `root=LABEL=ONIE-DEMO-OS`
+    - Installs squashfs rootfs via direct mount + `cp -a` (no overlayfs)
+    - Configures bootloader (GRUB for x86_64 UEFI/BIOS, U-Boot env for ARM)
+    - Switches ONIE to NOS mode
 
 ## Configuration Reference
 
@@ -93,6 +93,7 @@ The self-extracting `.bin` installer:
 | `INCLUDE_SOURCE_PKGS` | (empty) | Space-separated source pkg dirs |
 | `V` | `0` | Verbose output (1=on) |
 | `ONIE_ISO` | (empty) | Path to ONIE recovery ISO for KVM VM testing |
+| `ONIE_ISO_URL` | `https://packages.trafficmanager.net/...` | URL to auto-download ONIE recovery ISO |
 | `VM_MEM` | `2048` | VM memory in MB |
 | `VM_DISK_SIZE` | `40` | VM disk size in GB |
 | `VM_FIRMWARE` | `bios` | VM firmware: bios or uefi |
@@ -120,6 +121,8 @@ oniecraft/
     u-boot-arch/        # U-Boot bootloader installer (ARM)
       install.sh
   overlay/              # Filesystem overlay (rsync'd into rootfs)
+    etc/ssh/sshd_config.d/
+      root-login.conf   # Enable root SSH login for development
   packages/
     debs/               # Pre-built .deb packages
     source/             # Source packages to build
@@ -145,13 +148,25 @@ Automated KVM-based testing pipeline inspired by [SONiC's build_kvm_image.sh](ht
 | `vm-create` | `create` | Create qcow2 disk, boot ONIE ISO, select "embed" via expect to install ONIE |
 | `vm-install` | `install` | Boot ONIE VM, mount installer disk, run `onie-installer.bin` via expect |
 | `vm-run` | `run` | Boot installed NOS image interactively (SSH, VNC, serial) |
-| `vm-test` | `test` | Full pipeline: create -> install ONIE -> install NOS -> verify boot |
+| `vm-test` | `test` | Full pipeline: create -> install ONIE -> install NOS -> verify boot (serial + SSH) |
+| `vm-test-quick` | `test-quick` | Quick pipeline: install NOS -> verify boot (reuses existing ONIE disk) |
 
 ### VM Install Flow
 
 1. **create**: `qemu-img create` -> boot from ONIE recovery ISO -> expect selects GRUB "ONIE: Embed ONIE" -> ONIE installed to disk
-2. **install**: Boot from disk -> expect selects GRUB "ONIE: Install OS" -> mount secondary virtio disk containing installer -> execute `onie-installer.bin` -> NOS installed to ONIE partition
-3. **test**: Runs all phases sequentially, then boots NOS and verifies login prompt + `uname`/`uptime` via expect
+2. **install**: Boot from disk -> expect selects GRUB "ONIE: Install OS" -> kill ONIE discovery -> mount secondary virtio vfat disk containing installer -> execute `onie-installer.bin` -> NOS installed to ONIE partition
+3. **test**: Runs all phases sequentially, then boots NOS and verifies via serial console (login prompt) + SSH (`sshpass` to check os-release, kernel, network, disk)
+4. **test-quick**: Skips Phase 1 (ONIE embed), reuses existing ONIE disk, runs Phase 2 + Phase 3 only
+
+### Key Implementation Details
+
+- **Squashfs compression**: Must use `xz` (not zstd or lz4) — ONIE KVM recovery ISO kernel 5.4.86 only supports xz and gzip; xz chosen for better compression ratio
+- **Installer disk format**: vfat (FAT32) partitioned — ONIE kernel cannot mount modern ext4 filesystems
+- **Manual installer execution**: ONIE auto-discovery cannot mount secondary disk; instead, the expect script kills the discovery process, manually mounts `/dev/vdb1`, and runs the installer
+- **Serial console mode**: QEMU uses `server` mode (not `nowait`) so expect connects before GRUB's 3-second timeout expires
+- **ONIE updater completion**: Detected by monitoring `/var/log/onie.log` for `"ONIE: Success: Firmware update"`
+- **GRUB linux command line**: Includes `root=LABEL=ONIE-DEMO-OS` so the kernel can find the root filesystem
+- **SSH verification**: Root login enabled via overlay (`/etc/ssh/sshd_config.d/root-login.conf`), root password is `root`
 
 ### Example
 
@@ -174,4 +189,4 @@ make vm-run
 - Root/sudo access for chroot and mount operations
 - For cross-arch builds: `qemu-user-static`, cross-compiler toolchain
 - ONIE-compatible target switch for installation
-- For VM testing: `qemu-system-x86_64`, `qemu-img`, `expect`, ONIE KVM recovery ISO
+- For VM testing: `qemu-system-x86_64`, `qemu-img`, `expect`, `sshpass`, ONIE KVM recovery ISO (auto-downloaded)
