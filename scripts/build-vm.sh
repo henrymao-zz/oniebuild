@@ -18,6 +18,7 @@ OUTPUT_DISK=""
 ONIE_MODE="install"
 TIMEOUT_INSTALL="${VM_INSTALL_TIMEOUT:-600}"
 TIMEOUT_BOOT="${VM_BOOT_TIMEOUT:-120}"
+ONIE_BASE_DISK=""
 
 usage() {
     cat <<EOF
@@ -84,6 +85,7 @@ parse_args() {
             --ssh-port) SSH_FWD_PORT="$2"; shift 2 ;;
             --timeout-install) TIMEOUT_INSTALL="$2"; shift 2 ;;
             --timeout-boot) TIMEOUT_BOOT="$2"; shift 2 ;;
+            --onie-base-disk) ONIE_BASE_DISK="$2"; shift 2 ;;
             -h|--help) usage 0 ;;
             *) echo "ERROR: Unknown option: $1"; usage 1 ;;
         esac
@@ -94,6 +96,7 @@ parse_args() {
 
     : "${DISK:=$VM_DIR/onie-disk.qcow2}"
     : "${OUTPUT_DISK:=$VM_DIR/nos-disk.qcow2}"
+    : "${ONIE_BASE_DISK:=$VM_DIR/onie-base.qcow2}"
 
     if [[ "$ONIE_MODE" == "create" || "$ONIE_MODE" == "test" ]]; then
         if [[ -z "${ONIE_ISO:-}" ]]; then
@@ -460,7 +463,7 @@ EXPECT_EOF
 }
 
 verify_boot() {
-    echo "Booting installed NOS and verifying (serial console)..."
+    echo "Booting installed NOS and verifying..."
 
     expect <<EXPECT_EOF
 set timeout $TIMEOUT_BOOT
@@ -493,83 +496,25 @@ expect {
     }
 }
 
-puts ">>> NOS serial console verification PASSED"
+send "cat /etc/os-release\r"
+expect -re {[#\$] }
+
+send "uptime\r"
+expect -re {[#\$] }
+
+send "uname -a\r"
+expect -re {[#\$] }
+
+send "ip addr show\r"
+expect -re {[#\$] }
+
+puts ">>> NOS verification PASSED"
 
 catch {send "poweroff\r"} result
 catch {expect eof} result
 EXPECT_EOF
 
-    echo "Serial console verification complete."
-}
-
-verify_boot_interactive() {
-    echo "Booting installed NOS for SSH verification..."
-
-    expect <<EXPECT_EOF
-set timeout $TIMEOUT_BOOT
-spawn telnet 127.0.0.1 $KVM_PORT
-
-expect {
-    "login:" {
-        puts ">>> NOS booted successfully - login prompt detected"
-    }
-    timeout {
-        puts "ERROR: Timed out waiting for NOS boot"
-        exit 1
-    }
-}
-
-puts ">>> NOS is running, SSH verification will follow..."
-EXPECT_EOF
-
-    echo "NOS booted, running SSH verification..."
-    verify_boot_ssh
-
-    echo "Stopping VM after SSH verification..."
-    kill_kvm
-    sleep 2
-}
-
-verify_boot_ssh() {
-    echo "Verifying NOS via SSH (port $SSH_FWD_PORT)..."
-
-    if ! command -v sshpass >/dev/null 2>&1; then
-        echo "WARNING: sshpass not found, skipping SSH verification"
-        echo "  Install with: sudo apt install sshpass"
-        return 0
-    fi
-
-    local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR"
-
-    local retries=30
-    local wait_sec=2
-    for ((i = 1; i <= retries; i++)); do
-        if sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "echo SSH_OK" 2>/dev/null; then
-            echo "SSH connection established."
-
-            echo "--- OS Release ---"
-            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "cat /etc/os-release" 2>/dev/null
-
-            echo "--- Kernel ---"
-            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "uname -a" 2>/dev/null
-
-            echo "--- Uptime ---"
-            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "uptime" 2>/dev/null
-
-            echo "--- Network ---"
-            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "ip addr show" 2>/dev/null
-
-            echo "--- Disk ---"
-            sshpass -proot ssh $ssh_opts -p "$SSH_FWD_PORT" root@localhost "df -h" 2>/dev/null
-
-            echo "SSH verification PASSED"
-            return 0
-        fi
-        sleep "$wait_sec"
-    done
-
-    echo "WARNING: SSH verification failed (could not connect after $((retries * wait_sec))s)"
-    return 0
+    echo "NOS verification complete."
 }
 
 do_create() {
@@ -684,6 +629,9 @@ do_test() {
     kill_kvm
     sleep 2
 
+    echo "Saving clean ONIE base disk: $ONIE_BASE_DISK"
+    cp "$DISK" "$ONIE_BASE_DISK"
+
     echo ""
     echo "--- Phase 2: Install NOS via ONIE ---"
     local installer_disk
@@ -704,7 +652,9 @@ do_test() {
     echo "--- Phase 3: Boot and verify NOS ---"
     start_kvm "c"
     wait_for_kvm
-    verify_boot_interactive
+    verify_boot
+    kill_kvm
+    sleep 2
 
     echo ""
     echo "========================================="
@@ -725,13 +675,14 @@ do_test_quick() {
     echo "  Target disk:   $DISK"
     echo "========================================="
 
-    if [[ ! -f "$DISK" ]]; then
-        echo "ERROR: ONIE VM disk not found: $DISK"
-        echo "Run 'make vm-create' or 'make vm-test' first"
+    if [[ ! -f "$ONIE_BASE_DISK" ]]; then
+        echo "ERROR: ONIE base disk not found: $ONIE_BASE_DISK"
+        echo "Run 'make vm-test' first to create the ONIE base disk"
         exit 1
     fi
 
-    echo "Reusing existing ONIE disk: $DISK"
+    echo "Restoring clean ONIE disk from: $ONIE_BASE_DISK"
+    cp "$ONIE_BASE_DISK" "$DISK"
 
     echo ""
     echo "--- Phase 2: Install NOS via ONIE ---"
@@ -753,7 +704,9 @@ do_test_quick() {
     echo "--- Phase 3: Boot and verify NOS ---"
     start_kvm "c"
     wait_for_kvm
-    verify_boot_interactive
+    verify_boot
+    kill_kvm
+    sleep 2
 
     echo ""
     echo "========================================="

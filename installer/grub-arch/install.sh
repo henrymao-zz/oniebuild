@@ -139,11 +139,11 @@ if [ "\${next_entry}" ] ; then
    save_env next_entry
 fi
 
-menuentry 'Ubuntu NOS $demo_type' --unrestricted {
+menuentry 'Ubuntu $demo_type' --unrestricted {
         search --no-floppy --label --set=root $demo_volume_label
-        echo    'Loading Ubuntu NOS $demo_type kernel ...'
+        echo    'Loading Ubuntu $demo_type kernel ...'
         linux   /demo.vmlinuz root=LABEL=$demo_volume_label $GRUB_CMDLINE_LINUX \$ONIE_EXTRA_CMDLINE_LINUX DEMO_TYPE=$demo_type
-        echo    'Loading Ubuntu NOS $demo_type initial ramdisk ...'
+        echo    'Loading Ubuntu $demo_type initial ramdisk ...'
         initrd  /demo.initrd
 }
 EOF
