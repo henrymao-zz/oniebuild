@@ -85,10 +85,7 @@ fi
 echo "  Kernel: $VMLINUZ"
 echo "  Initrd: $INITRD"
 
-command -v mksquashfs >/dev/null 2>&1 || {
-    echo "ERROR: mksquashfs not found. Install: sudo apt install squashfs-tools"
-    exit 1
-}
+echo "Packaging rootfs into tar.gz archive..."
 
 echo "Cleaning up rootfs before packaging..."
 sudo rm -rf "$ROOTFS/packages/" 2>/dev/null || true
@@ -137,8 +134,8 @@ done
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf $TMP_DIR' EXIT
 
-echo "Creating squashfs rootfs (excluding boot/)..."
-sudo mksquashfs "$ROOTFS" "$TMP_DIR/fs.squashfs" -comp xz -b 1M -e boot -e packages -e var/cache/apt -e var/lib/apt/lists -e usr/share/doc -e usr/share/man -e usr/share/info -e usr/share/locale -e usr/include -no-progress -no-exports -no-xattrs
+echo "Creating tar.gz rootfs (excluding boot/)..."
+sudo tar -czf "$TMP_DIR/fs.tar.gz" -C "$ROOTFS" --exclude='./boot' --exclude='./packages' --exclude='./var/cache/apt' --exclude='./var/lib/apt/lists' --exclude='./usr/share/doc' --exclude='./usr/share/man' --exclude='./usr/share/info' --exclude='./usr/share/locale' --exclude='./usr/include' .
 
 INSTALLER_TMP="$TMP_DIR/installer"
 mkdir -p "$INSTALLER_TMP"
@@ -147,7 +144,7 @@ sudo cp "$VMLINUZ" "$INSTALLER_TMP/demo.vmlinuz"
 sudo cp "$INITRD" "$INSTALLER_TMP/demo.initrd"
 sudo chmod a+r "$INSTALLER_TMP/demo.vmlinuz" "$INSTALLER_TMP/demo.initrd"
 
-cp "$TMP_DIR/fs.squashfs" "$INSTALLER_TMP/fs.squashfs"
+cp "$TMP_DIR/fs.tar.gz" "$INSTALLER_TMP/fs.tar.gz"
 
 if [[ "$BOOTLOADER" == "grub" ]]; then
     INSTALL_ARCH_DIR="$INSTALLER_DIR/grub-arch"
@@ -231,7 +228,7 @@ mount -t ext4 -o defaults,rw $demo_dev $demo_mnt || exit 1
 mkdir -p $demo_mnt/boot
 cp boot/vmlinuz boot/initrd.img $demo_mnt/boot/
 
-cp fs.squashfs $demo_mnt/
+cp fs.tar.gz $demo_mnt/
 
 cat > $demo_mnt/install-rootfs.sh <<'ROOTFS_EOF'
 #!/bin/sh
@@ -239,22 +236,10 @@ set -e
 
 demo_mnt="$1"
 
-echo "Installing squashfs rootfs..."
-mkdir -p /tmp/rootfs_squash
-mount -t squashfs -o ro "$demo_mnt/fs.squashfs" /tmp/rootfs_squash
+echo "Extracting rootfs..."
+tar -xzf "$demo_mnt/fs.tar.gz" -C "$demo_mnt/"
 
-mkdir -p /tmp/rootfs_overlay /tmp/rootfs_merged
-mount -t overlay overlay -o lowerdir=/tmp/rootfs_squash,upperdir=/tmp/rootfs_overlay/rw,workdir=/tmp/rootfs_overlay/work /tmp/rootfs_merged
-
-echo "Copying rootfs to target..."
-cd /tmp/rootfs_merged
-cp -a . "$demo_mnt/"
-
-umount /tmp/rootfs_merged
-umount /tmp/rootfs_squash
-rm -rf /tmp/rootfs_squash /tmp/rootfs_overlay /tmp/rootfs_merged
-
-rm -f "$demo_mnt/fs.squashfs" "$demo_mnt/install-rootfs.sh"
+rm -f "$demo_mnt/fs.tar.gz" "$demo_mnt/install-rootfs.sh"
 ROOTFS_EOF
 chmod +x $demo_mnt/install-rootfs.sh
 

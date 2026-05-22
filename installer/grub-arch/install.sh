@@ -100,16 +100,27 @@ mount -t ext4 -o defaults,rw $demo_dev $demo_mnt || { echo "Error: Unable to mou
 
 cp demo.vmlinuz demo.initrd $demo_mnt/
 
-if [ -f fs.squashfs ]; then
+if [ -f fs.tar.gz ]; then
+    echo "Extracting tar.gz rootfs..."
+    tar -xzf fs.tar.gz -C "$demo_mnt/" || { echo "Error: Unable to extract tar.gz rootfs"; exit 1; }
+    rm -f fs.tar.gz
+elif [ -f fs.squashfs ]; then
     echo "Mounting squashfs rootfs..."
     mkdir -p /tmp/rootfs_squash
-    mount -t squashfs -o ro fs.squashfs /tmp/rootfs_squash || { echo "Error: Unable to mount squashfs"; exit 1; }
-
-    echo "Copying rootfs to target..."
-    cp -a /tmp/rootfs_squash/. "$demo_mnt/"
-
-    umount /tmp/rootfs_squash
-    rm -rf /tmp/rootfs_squash
+    if mount -t squashfs -o ro fs.squashfs /tmp/rootfs_squash 2>/dev/null; then
+        echo "Copying rootfs to target..."
+        cp -a /tmp/rootfs_squash/. "$demo_mnt/"
+        umount /tmp/rootfs_squash
+        rm -rf /tmp/rootfs_squash
+    elif command -v unsquashfs >/dev/null 2>&1; then
+        echo "Extracting squashfs with unsquashfs..."
+        unsquashfs -d /tmp/rootfs_squash fs.squashfs || { echo "Error: Unable to extract squashfs"; exit 1; }
+        cp -a /tmp/rootfs_squash/. "$demo_mnt/"
+        rm -rf /tmp/rootfs_squash
+    else
+        echo "Error: No squashfs kernel support or unsquashfs tool found"
+        exit 1
+    fi
     rm -f fs.squashfs
 fi
 
