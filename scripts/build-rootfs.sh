@@ -163,6 +163,8 @@ network:
   ethernets:
     eth0:
       dhcp4: true
+    ens3:
+      dhcp4: true
 EOF
 
 sudo mkdir -p "$ROOTFS/etc/systemd/system/docker.service.d"

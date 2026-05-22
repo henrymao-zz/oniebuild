@@ -1,0 +1,9 @@
+name: onie-craft
+base: ubuntu@22.04
+sdks:
+  - name: project-build-tools
+actions:
+  build: make image
+  test: make vm-test-quick
+  clean: make clean
+  shell: bash

@@ -94,7 +94,7 @@ $(STAMPDIR)/packages: $(STAMPDIR)/rootfs | $(STAMPDIR) $(BUILDDIR)
 
 $(STAMPDIR)/image: $(STAMPDIR)/rootfs $(STAMPDIR)/kernel $(STAMPDIR)/packages | $(STAMPDIR) $(BUILDDIR)
 	$(Q)echo "==== Creating ONIE installer image ===="
-	$(Q)scripts/mk-installer.sh \
+	$(Q)sudo scripts/mk-installer.sh \
 		--arch "$(ARCH)" \
 		--bootloader "$(BOOTLOADER)" \
 		--rootfs "$(ROOTFS_DIR)" \
@@ -113,12 +113,12 @@ $(BUILDDIR):
 
 clean:
 	$(Q)echo "==== Cleaning build artifacts ===="
-	$(Q)rm -rf $(ROOTFS_DIR) $(KERNEL_DIR) $(STAMPDIR)
-	$(Q)rm -f $(BUILDDIR)/$(IMAGE_NAME) $(BUILDDIR)/*.squashfs $(BUILDDIR)/*.zip
+	$(Q)sudo rm -rf $(ROOTFS_DIR) $(KERNEL_DIR) $(STAMPDIR)
+	$(Q)sudo rm -f $(BUILDDIR)/$(IMAGE_NAME) $(BUILDDIR)/*.squashfs $(BUILDDIR)/*.zip
 
 distclean: clean
 	$(Q)echo "==== Removing all build data ===="
-	$(Q)rm -rf $(BUILDDIR)
+	$(Q)sudo rm -rf $(BUILDDIR)
 
 vm-create:
 	$(Q)scripts/build-vm.sh create \

@@ -180,22 +180,28 @@ prepare_installer_disk() {
     sudo parted -s "$installer_disk" mkpart primary fat32 1MiB 100%
     sudo parted -s "$installer_disk" set 1 boot on
 
-    local loop_dev
-    loop_dev=$(sudo losetup --show -fP "$installer_disk")
-    INSTALLER_LOOP_DEV="$loop_dev"
+    local offset=$((2048 * 512))
 
-    sudo mkfs.vfat -F 32 "${loop_dev}p1" >/dev/null 2>&1
+    if ! mformat -i "$installer_disk@@$offset" -v ONIEINST :: 2>/dev/null; then
+        local loop_dev
+        loop_dev=$(sudo losetup --show -fP "$installer_disk")
+        INSTALLER_LOOP_DEV="$loop_dev"
 
-    local tmpdir
-    tmpdir=$(mktemp -d)
-    sudo mount "${loop_dev}p1" "$tmpdir"
-    sudo cp "$INSTALLER" "$tmpdir/onie-installer.bin"
-    sudo chmod +x "$tmpdir/onie-installer.bin"
+        sudo mkfs.vfat -F 32 "${loop_dev}p1" >/dev/null 2>&1
 
-    sudo umount "$tmpdir"
-    sudo losetup -d "$loop_dev"
-    INSTALLER_LOOP_DEV=""
-    rm -rf "$tmpdir"
+        local tmpdir
+        tmpdir=$(mktemp -d)
+        sudo mount "${loop_dev}p1" "$tmpdir"
+        sudo cp "$INSTALLER" "$tmpdir/onie-installer.bin"
+        sudo chmod +x "$tmpdir/onie-installer.bin"
+
+        sudo umount "$tmpdir"
+        sudo losetup -d "$loop_dev"
+        INSTALLER_LOOP_DEV=""
+        rm -rf "$tmpdir"
+    else
+        mcopy -i "$installer_disk@@$offset" "$INSTALLER" ::onie-installer.bin
+    fi
 
     echo "$installer_disk"
 }

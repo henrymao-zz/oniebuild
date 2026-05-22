@@ -91,27 +91,27 @@ command -v mksquashfs >/dev/null 2>&1 || {
 }
 
 echo "Cleaning up rootfs before packaging..."
-sudo rm -rf "$ROOTFS/packages/"
-sudo rm -rf "$ROOTFS/var/cache/apt/archives/"*
-sudo rm -rf "$ROOTFS/var/cache/apt/*.bin"
-sudo rm -rf "$ROOTFS/var/lib/apt/lists/"*
-sudo rm -rf "$ROOTFS/usr/share/doc/"*
-sudo rm -rf "$ROOTFS/usr/share/locale/"*
-sudo rm -rf "$ROOTFS/usr/share/man/"*
-sudo rm -rf "$ROOTFS/usr/share/info/"*
-sudo rm -rf "$ROOTFS/usr/share/lintian/"*
-sudo rm -rf "$ROOTFS/usr/share/common-licenses/"*
-sudo rm -rf "$ROOTFS/usr/share/pixmaps/"*
-sudo rm -rf "$ROOTFS/usr/include/"*
-sudo rm -rf "$ROOTFS/usr/share/bug/"*
-sudo rm -rf "$ROOTFS/usr/share/linda/"*
-sudo rm -rf "$ROOTFS/usr/share/doc-base/"*
-sudo find "$ROOTFS" -name "*.pyc" -delete
-sudo find "$ROOTFS" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-sudo find "$ROOTFS" -name "*.a" -not -path "*/lib/modules/*" -delete
-sudo find "$ROOTFS" -name "*.la" -delete
-sudo find "$ROOTFS/usr/share/locale" -mindepth 1 -maxdepth 1 -not -name "en_US" -not -name "C" -exec rm -rf {} + 2>/dev/null || true
-sudo find "$ROOTFS/usr/lib/locale" -mindepth 1 -maxdepth 1 -not -name "en_US" -not -name "C" -exec rm -rf {} + 2>/dev/null || true
+sudo rm -rf "$ROOTFS/packages/" 2>/dev/null || true
+sudo rm -rf "$ROOTFS/var/cache/apt/archives/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/var/cache/apt/*.bin" 2>/dev/null || true
+sudo rm -rf "$ROOTFS/var/lib/apt/lists/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/doc/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/locale/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/man/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/info/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/lintian/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/common-licenses/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/pixmaps/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/include/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/bug/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/linda/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/share/doc-base/"* 2>/dev/null || true
+sudo find "$ROOTFS" -ignore_readdir_race -name "*.pyc" -delete 2>/dev/null || true
+sudo find "$ROOTFS" -ignore_readdir_race -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+sudo find "$ROOTFS" -ignore_readdir_race -name "*.a" -not -path "*/lib/modules/*" -delete 2>/dev/null || true
+sudo find "$ROOTFS" -ignore_readdir_race -name "*.la" -delete 2>/dev/null || true
+sudo find "$ROOTFS/usr/share/locale" -ignore_readdir_race -mindepth 1 -maxdepth 1 -not -name "en_US" -not -name "C" -exec rm -rf {} + 2>/dev/null || true
+sudo find "$ROOTFS/usr/lib/locale" -ignore_readdir_race -mindepth 1 -maxdepth 1 -not -name "en_US" -not -name "C" -exec rm -rf {} + 2>/dev/null || true
 
 echo "Removing unnecessary firmware..."
 FW_DIRS="nvidia qcom amdgpu i915 mediatek ath11k ath10k ath12k ath6k ath9k intel-ucode radeon amd-ucode dpaa2 meson rockchip sunxi tegra vsc cypress imx ti-connectivity rtl_bt rtl_nic rtlwifi rtw88 rtw89 brcm qca adsl dvb siano ev56 go7007 cxgb4 usbdux snd 3com kaweth edgeport emi26 emi62 tigon ess sun yamaha acenic cirrus ezusb sb16 ositech vxworks keyspan_pda keyspan e100 dabusb av7110 ttusb-budget ihex2fw phanfw.bin ct2fw.bin ctfw.bin lcs.fw netronome mrvl mellanox qed xe"
@@ -121,7 +121,7 @@ done
 
 echo "Optimizing kernel modules..."
 if [[ -d "$ROOTFS/lib/modules" ]]; then
-    sudo find "$ROOTFS/lib/modules" -type f -name "*.ko.zst" | while read ko; do
+    sudo find "$ROOTFS/lib/modules" -ignore_readdir_race -type f -name "*.ko.zst" 2>/dev/null | while read ko; do
         sudo zstd -d "$ko" -o "${ko%.zst}.ko" --rm 2>/dev/null && \
         sudo strip --strip-unneeded "${ko%.zst}.ko" && \
         sudo zstd -19 -q "${ko%.zst}.ko" -o "$ko" --rm 2>/dev/null || true
@@ -130,7 +130,7 @@ fi
 
 echo "Stripping binaries..."
 sudo find "$ROOTFS/usr/bin" "$ROOTFS/usr/sbin" "$ROOTFS/usr/lib/x86_64-linux-gnu" \
-    -type f -executable -not -name "*.sh" -not -name "*.py" 2>/dev/null | while read f; do
+    -ignore_readdir_race -type f -executable -not -name "*.sh" -not -name "*.py" 2>/dev/null | while read f; do
     sudo strip --strip-all "$f" 2>/dev/null || sudo strip --strip-unneeded "$f" 2>/dev/null || true
 done
 
@@ -374,6 +374,9 @@ cp "$SHARCH_BODY" "$OUTPUT"
 sed -i -e "s/%%IMAGE_SHA1%%/$SHA1/" "$OUTPUT"
 cat "$SHARCH" >> "$OUTPUT"
 chmod +x "$OUTPUT"
+if [[ -n "${SUDO_USER:-}" ]]; then
+    chown "$SUDO_USER:$SUDO_USER" "$OUTPUT" 2>/dev/null || true
+fi
 
 echo ""
 echo "Success: ONIE installer image created:"
