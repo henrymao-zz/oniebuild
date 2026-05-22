@@ -116,6 +116,49 @@ rm -f "$DISK_IMG"
 
 echo "Rootfs extracted to: $ROOTFS_DIR"
 
+echo "Cleaning up rootfs before packaging..."
+sudo rm -rf "$ROOTFS_DIR/var/cache/apt/archives/"*
+sudo rm -rf "$ROOTFS_DIR/var/cache/apt/*.bin"
+sudo rm -rf "$ROOTFS_DIR/var/lib/apt/lists/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/doc/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/locale/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/man/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/info/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/lintian/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/common-licenses/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/pixmaps/"*
+sudo rm -rf "$ROOTFS_DIR/usr/include/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/bug/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/linda/"*
+sudo rm -rf "$ROOTFS_DIR/usr/share/doc-base/"*
+sudo find "$ROOTFS_DIR" -name "*.pyc" -delete
+sudo find "$ROOTFS_DIR" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+sudo find "$ROOTFS_DIR" -name "*.a" -not -path "*/lib/modules/*" -delete
+sudo find "$ROOTFS_DIR" -name "*.la" -delete
+sudo find "$ROOTFS_DIR/usr/share/locale" -mindepth 1 -maxdepth 1 -not -name "en_US" -not -name "C" -exec rm -rf {} + 2>/dev/null || true
+sudo find "$ROOTFS_DIR/usr/lib/locale" -mindepth 1 -maxdepth 1 -not -name "en_US" -not -name "C" -exec rm -rf {} + 2>/dev/null || true
+
+echo "Removing unnecessary firmware..."
+FW_DIRS="nvidia qcom amdgpu i915 mediatek ath11k ath10k ath12k ath6k ath9k intel-ucode radeon amd-ucode dpaa2 meson rockchip sunxi tegra vsc cypress imx ti-connectivity rtl_bt rtl_nic rtlwifi rtw88 rtw89 brcm qca adsl dvb siano ev56 go7007 cxgb4 usbdux snd 3com kaweth edgeport emi26 emi62 tigon ess sun yamaha acenic cirrus ezusb sb16 ositech vxworks keyspan_pda keyspan e100 dabusb av7110 ttusb-budget ihex2fw phanfw.bin ct2fw.bin ctfw.bin lcs.fw netronome mrvl mellanox qed xe"
+for d in $FW_DIRS; do
+    sudo rm -rf "$ROOTFS_DIR/lib/firmware/$d" "$ROOTFS_DIR/usr/lib/firmware/$d" 2>/dev/null || true
+done
+
+echo "Optimizing kernel modules..."
+if [[ -d "$ROOTFS_DIR/lib/modules" ]]; then
+    sudo find "$ROOTFS_DIR/lib/modules" -type f -name "*.ko.zst" | while read ko; do
+        sudo zstd -d "$ko" -o "${ko%.zst}.ko" --rm 2>/dev/null && \
+        sudo strip --strip-unneeded "${ko%.zst}.ko" && \
+        sudo zstd -19 -q "${ko%.zst}.ko" -o "$ko" --rm 2>/dev/null || true
+    done
+fi
+
+echo "Stripping binaries..."
+sudo find "$ROOTFS_DIR/usr/bin" "$ROOTFS_DIR/usr/sbin" "$ROOTFS_DIR/usr/lib/x86_64-linux-gnu" \
+    -type f -executable -not -name "*.sh" -not -name "*.py" 2>/dev/null | while read f; do
+    sudo strip --strip-all "$f" 2>/dev/null || sudo strip --strip-unneeded "$f" 2>/dev/null || true
+done
+
 KVER=""
 if [[ -f "$KERNEL_DIR/.kernel_version" ]]; then
     KVER=$(cat "$KERNEL_DIR/.kernel_version")
@@ -156,7 +199,7 @@ echo "Creating squashfs rootfs (excluding boot/)..."
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf $TMP_DIR' EXIT
 
-sudo mksquashfs "$ROOTFS_DIR" "$TMP_DIR/fs.squashfs" -comp xz -b 1M -e boot -e var/cache/apt -e var/lib/apt/lists -no-progress -no-exports -no-xattrs
+sudo mksquashfs "$ROOTFS_DIR" "$TMP_DIR/fs.squashfs" -comp xz -b 1M -e boot -e var/cache/apt -e var/lib/apt/lists -e usr/share/doc -e usr/share/man -e usr/share/info -e usr/share/locale -e usr/include -no-progress -no-exports -no-xattrs
 
 INSTALLER_TMP="$TMP_DIR/installer"
 mkdir -p "$INSTALLER_TMP"

@@ -91,6 +91,7 @@ command -v mksquashfs >/dev/null 2>&1 || {
 }
 
 echo "Cleaning up rootfs before packaging..."
+sudo rm -rf "$ROOTFS/packages/"
 sudo rm -rf "$ROOTFS/var/cache/apt/archives/"*
 sudo rm -rf "$ROOTFS/var/cache/apt/*.bin"
 sudo rm -rf "$ROOTFS/var/lib/apt/lists/"*
@@ -113,69 +114,10 @@ sudo find "$ROOTFS/usr/share/locale" -mindepth 1 -maxdepth 1 -not -name "en_US" 
 sudo find "$ROOTFS/usr/lib/locale" -mindepth 1 -maxdepth 1 -not -name "en_US" -not -name "C" -exec rm -rf {} + 2>/dev/null || true
 
 echo "Removing unnecessary firmware..."
-sudo rm -rf "$ROOTFS/usr/lib/firmware/nvidia"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/qcom"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/amdgpu"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/i915"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/mediatek"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ath11k"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ath10k"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ath12k"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ath6k"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ath9k"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/intel-ucode"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/radeon"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/amd-ucode"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/dpaa2"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/meson"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/rockchip"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/sunxi"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/tegra"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/vsc"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/cypress"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/imx"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ti-connectivity"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/rtl_bt"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/rtl_nic"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/rtlwifi"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/rtw88"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/rtw89"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/brcm"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/qca"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/adsl"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/dvb"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/siano"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ev56"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/go7007"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/cxgb4"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/usbdux"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/snd"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/3com"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/kaweth"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/edgeport"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/emi26"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/emi62"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/tigon"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ess"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/sun"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/yamaha"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/acenic"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/cirrus"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ezusb"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/sb16"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ositech"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/vxworks"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/keyspan_pda"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/keyspan"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/e100"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/dabusb"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/av7110"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ttusb-budget"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ihex2fw"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/phanfw.bin"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ct2fw.bin"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/ctfw.bin"
-sudo rm -rf "$ROOTFS/usr/lib/firmware/lcs.fw"
+FW_DIRS="nvidia qcom amdgpu i915 mediatek ath11k ath10k ath12k ath6k ath9k intel-ucode radeon amd-ucode dpaa2 meson rockchip sunxi tegra vsc cypress imx ti-connectivity rtl_bt rtl_nic rtlwifi rtw88 rtw89 brcm qca adsl dvb siano ev56 go7007 cxgb4 usbdux snd 3com kaweth edgeport emi26 emi62 tigon ess sun yamaha acenic cirrus ezusb sb16 ositech vxworks keyspan_pda keyspan e100 dabusb av7110 ttusb-budget ihex2fw phanfw.bin ct2fw.bin ctfw.bin lcs.fw netronome mrvl mellanox qed xe"
+for d in $FW_DIRS; do
+    sudo rm -rf "$ROOTFS/lib/firmware/$d" "$ROOTFS/usr/lib/firmware/$d" 2>/dev/null || true
+done
 
 echo "Optimizing kernel modules..."
 if [[ -d "$ROOTFS/lib/modules" ]]; then
@@ -196,7 +138,7 @@ TMP_DIR=$(mktemp -d)
 trap 'rm -rf $TMP_DIR' EXIT
 
 echo "Creating squashfs rootfs (excluding boot/)..."
-sudo mksquashfs "$ROOTFS" "$TMP_DIR/fs.squashfs" -comp xz -b 1M -e boot -e var/cache/apt -e var/lib/apt/lists -no-progress -no-exports -no-xattrs
+sudo mksquashfs "$ROOTFS" "$TMP_DIR/fs.squashfs" -comp xz -b 1M -e boot -e packages -e var/cache/apt -e var/lib/apt/lists -e usr/share/doc -e usr/share/man -e usr/share/info -e usr/share/locale -e usr/include -no-progress -no-exports -no-xattrs
 
 INSTALLER_TMP="$TMP_DIR/installer"
 mkdir -p "$INSTALLER_TMP"

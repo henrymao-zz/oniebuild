@@ -125,6 +125,10 @@ elif [[ -n "$KERNEL_VERSION" ]]; then
             exit 1
         }
 
+        sudo chroot "$ROOTFS" apt-get clean
+        sudo rm -rf "$ROOTFS/var/cache/apt/archives/"*
+        sudo rm -rf "$ROOTFS/var/lib/apt/lists/"*
+
         KVER="$KERNEL_VERSION"
     else
         echo "ERROR: --rootfs is required when using pre-built kernel packages"
@@ -149,6 +153,10 @@ if [[ -n "${ROOTFS:-}" && -d "$ROOTFS" ]]; then
             echo "ERROR: Failed to install default kernel package"
             exit 1
         }
+
+        sudo chroot "$ROOTFS" apt-get clean
+        sudo rm -rf "$ROOTFS/var/cache/apt/archives/"*
+        sudo rm -rf "$ROOTFS/var/lib/apt/lists/"*
 
         KVER=$(ls "$ROOTFS/boot/vmlinuz-"* 2>/dev/null | head -1 | sed "s|.*vmlinuz-||")
         if [[ -z "$KVER" ]]; then
