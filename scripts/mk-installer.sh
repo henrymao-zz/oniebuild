@@ -100,6 +100,7 @@ sudo rm -rf "$ROOTFS/usr/share/lintian/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/common-licenses/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/pixmaps/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/include/"* 2>/dev/null || true
+sudo rm -rf "$ROOTFS/usr/lib/cargo/" 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/bug/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/linda/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/doc-base/"* 2>/dev/null || true
@@ -111,14 +112,23 @@ sudo find "$ROOTFS/usr/share/locale" -ignore_readdir_race -mindepth 1 -maxdepth 
 sudo find "$ROOTFS/usr/lib/locale" -ignore_readdir_race -mindepth 1 -maxdepth 1 -not -name "en_US" -not -name "C" -exec rm -rf {} + 2>/dev/null || true
 
 echo "Removing unnecessary firmware..."
-FW_DIRS="nvidia qcom amdgpu i915 mediatek ath11k ath10k ath12k ath6k ath9k intel-ucode radeon amd-ucode dpaa2 meson rockchip sunxi tegra vsc cypress imx ti-connectivity rtl_bt rtl_nic rtlwifi rtw88 rtw89 brcm qca adsl dvb siano ev56 go7007 cxgb4 usbdux snd 3com kaweth edgeport emi26 emi62 tigon ess sun yamaha acenic cirrus ezusb sb16 ositech vxworks keyspan_pda keyspan e100 dabusb av7110 ttusb-budget ihex2fw phanfw.bin ct2fw.bin ctfw.bin lcs.fw netronome mrvl mellanox qed xe"
+# Aggressive firmware pruning for network switch appliance
+# Keep: CPU microcode (amd64-microcode, intel-microcode), virtio, minimal net/storage
+FW_DIRS="nvidia qcom amdgpu i915 mediatek ath11k ath10k ath12k ath6k ath9k intel-ucode intel radeon amd-ucode amd amdnpu dpaa2 meson rockchip sunxi tegra vsc cypress imx ti-connectivity ti rtl_bt rtl_nic rtlwifi rtw88 rtw89 brcm qca adsl dvb siano ev56 go7007 cxgb4 usbdux snd 3com kaweth edgeport emi26 emi62 tigon ess sun yamaha acenic cirrus ezusb sb16 ositech vxworks keyspan_pda keyspan e100 dabusb av7110 ttusb-budget ihex2fw phanfw.bin ct2fw.bin ctfw.bin lcs.fw netronome mrvl mellanox qed xe liquidio asihpi LENOVO bnx2x amlogic ueagle-atm libertas airoha amphion cnm ea rsi mwl8k atmel dell nxp wfx"
 for d in $FW_DIRS; do
     sudo rm -rf "$ROOTFS/lib/firmware/$d" "$ROOTFS/usr/lib/firmware/$d" 2>/dev/null || true
 done
 
 echo "Optimizing kernel modules..."
 if [[ -d "$ROOTFS/lib/modules" ]]; then
-    sudo find "$ROOTFS/lib/modules" -ignore_readdir_race -type f -name "*.ko.zst" 2>/dev/null | while read ko; do
+    # Remove unnecessary kernel modules for network switch appliance
+    MODULES_DIR="$ROOTFS/lib/modules"
+    KMOD_DIRS="sound drivers/media drivers/gpu drivers/drm drivers/infiniband drivers/staging"
+    for d in $KMOD_DIRS; do
+        sudo rm -rf "$MODULES_DIR/"*/kernel/$d 2>/dev/null || true
+    done
+    # Re-compress and strip remaining modules
+    sudo find "$MODULES_DIR" -ignore_readdir_race -type f -name "*.ko.zst" 2>/dev/null | while read ko; do
         sudo zstd -d "$ko" -o "${ko%.zst}.ko" --rm 2>/dev/null && \
         sudo strip --strip-unneeded "${ko%.zst}.ko" && \
         sudo zstd -19 -q "${ko%.zst}.ko" -o "$ko" --rm 2>/dev/null || true
