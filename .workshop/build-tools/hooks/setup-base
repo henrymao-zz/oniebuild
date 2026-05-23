@@ -1,7 +1,7 @@
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  make squashfs-tools debootstrap \
-  qemu-kvm qemu-utils expect sshpass mtools zstd \
+  make squashfs-tools debootstrap mmdebstrap \
+  qemu-system-x86 qemu-utils expect sshpass mtools zstd \
   initramfs-tools sudo kmod iproute2 iputils-ping \
   openssh-server ca-certificates curl gpg locales logrotate \
   dbus

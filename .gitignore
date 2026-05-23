@@ -23,3 +23,4 @@ overlay/packages/
 overlay/prime_overlay
 overlay/stage_overlay
 overlay/work/
+.workshop.lock
