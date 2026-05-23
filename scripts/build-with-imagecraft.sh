@@ -53,11 +53,20 @@ mkdir -p "$BUILD_DIR"
 IMAGECRAFT_DIR="$BUILD_DIR/imagecraft"
 mkdir -p "$IMAGECRAFT_DIR"
 
-echo "Running imagecraft pack --destructive-mode..."
-imagecraft pack --destructive-mode 2>&1 || {
+echo "Running imagecraft pack..."
+TMP_SCRIPT=$(mktemp)
+cat > "$TMP_SCRIPT" << 'PYEOF'
+import sys
+from imagecraft.cli import run
+sys.exit(run())
+PYEOF
+cd "$PROJECT_DIR" && sudo /snap/imagecraft/current/bin/python3 "$TMP_SCRIPT" pack --destructive-mode 2>&1
+RC=$?
+rm -f "$TMP_SCRIPT"
+if [[ $RC -ne 0 ]]; then
     echo "ERROR: imagecraft pack failed"
-    exit 1
-}
+    exit $RC
+fi
 
 DISK_IMG="$PROJECT_DIR/pc.img"
 if [[ ! -f "$DISK_IMG" ]]; then
