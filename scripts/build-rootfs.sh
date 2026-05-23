@@ -120,7 +120,10 @@ sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends \
     gpg \
     locales \
     logrotate \
-    zstd
+    zstd \
+    net-tools \
+    netplan.io \
+    fancontrol
 
 if [[ "$DEBARCH" == "arm64" ]]; then
     sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends \
@@ -150,6 +153,10 @@ sudo rm -rf "$ROOTFS/var/cache/apt/archives/"*
 sudo rm -rf "$ROOTFS/var/cache/apt/*.bin"
 
 sudo chroot "$ROOTFS" bash -c "echo 'root:root' | chpasswd"
+
+sudo chroot "$ROOTFS" useradd -m -s /bin/bash admin
+sudo chroot "$ROOTFS" bash -c "echo 'admin:admin' | chpasswd"
+sudo chroot "$ROOTFS" usermod -aG sudo admin
 
 sudo chroot "$ROOTFS" systemctl enable ssh
 sudo chroot "$ROOTFS" systemctl enable systemd-resolved

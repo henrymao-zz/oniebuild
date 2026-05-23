@@ -53,4 +53,7 @@ parts:
       - locales
       - logrotate
       - zstd
+      - net-tools
+      - netplan.io
+      - fancontrol
       - linux-image-generic

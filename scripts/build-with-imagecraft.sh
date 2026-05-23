@@ -125,6 +125,11 @@ rm -f "$DISK_IMG"
 
 echo "Rootfs extracted to: $ROOTFS_DIR"
 
+echo "Creating admin user..."
+sudo chroot "$ROOTFS_DIR" useradd -m -s /bin/bash admin
+sudo chroot "$ROOTFS_DIR" bash -c "echo 'admin:admin' | chpasswd"
+sudo chroot "$ROOTFS_DIR" usermod -aG sudo admin
+
 echo "Cleaning up rootfs before packaging..."
 sudo rm -rf "$ROOTFS_DIR/var/cache/apt/archives/"*
 sudo rm -rf "$ROOTFS_DIR/var/cache/apt/*.bin"
