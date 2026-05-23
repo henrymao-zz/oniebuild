@@ -3,7 +3,7 @@ NOS_NAME ?= Ubuntu
 NOS_VERSION ?= 1.0.0
 
 ARCH ?= x86_64
-UBUNTU_SUITE ?= noble
+UBUNTU_SUITE ?= resolute
 UBUNTU_MIRROR ?= http://archive.ubuntu.com/ubuntu
 UBUNTU_COMPONENTS ?= main,universe
 
@@ -15,6 +15,8 @@ INCLUDE_DOCKER ?= n
 KERNEL_SRC ?=
 KERNEL_CONFIG ?=
 KERNEL_VERSION ?=
+KERNEL_PKG ?= linux-sonic
+KERNEL_PPA ?= ppa:canonical-kernel-team/bootstrap
 
 INCLUDE_DEBS ?=
 INCLUDE_SOURCE_PKGS ?=

@@ -36,7 +36,7 @@ parts:
         --format=dir \
         --variant=minbase \
         --include=apt,systemd,systemd-sysv,systemd-resolved,dbus,iproute2,iputils-ping,openssh-server,sudo,less,kmod,initramfs-tools,ca-certificates,curl,gpg,locales,logrotate,zstd \
-        noble \
+        resolute \
         $CRAFT_PART_INSTALL/ \
         http://archive.ubuntu.com/ubuntu/
       rm -r $CRAFT_PART_INSTALL/dev/*
@@ -44,7 +44,7 @@ parts:
       cat << EOF > $CRAFT_PART_INSTALL/etc/apt/sources.list.d/ubuntu.sources
       Types: deb deb-src
       URIs: http://archive.ubuntu.com/ubuntu
-      Suites: noble noble-updates noble-backports noble-security
+      Suites: resolute resolute-updates resolute-backports resolute-security
       Components: main universe
       Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
       EOF
@@ -53,9 +53,18 @@ parts:
 
   packages:
     plugin: nil
-    after: [rootfs]
+    after: [rootfs, ppa]
     overlay-packages:
-      - linux-image-generic
+      - linux-sonic
+
+  ppa:
+    plugin: nil
+    after: [rootfs]
+    overlay-script: |
+      apt-get update
+      apt-get install -y --no-install-recommends software-properties-common
+      add-apt-repository -y ppa:canonical-kernel-team/bootstrap
+      apt-get update
 
   config:
     plugin: nil

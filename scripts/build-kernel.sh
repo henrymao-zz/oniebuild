@@ -5,6 +5,8 @@ ARCH=""
 KERNEL_SRC=""
 KERNEL_CONFIG=""
 KERNEL_VERSION=""
+KERNEL_PKG=""
+KERNEL_PPA=""
 BUILDDIR=""
 ROOTFS=""
 
@@ -14,6 +16,8 @@ while [[ $# -gt 0 ]]; do
         --kernel-src) KERNEL_SRC="$2"; shift 2 ;;
         --kernel-config) KERNEL_CONFIG="$2"; shift 2 ;;
         --kernel-version) KERNEL_VERSION="$2"; shift 2 ;;
+        --kernel-pkg) KERNEL_PKG="$2"; shift 2 ;;
+        --kernel-ppa) KERNEL_PPA="$2"; shift 2 ;;
         --builddir) BUILDDIR="$2"; shift 2 ;;
         --rootfs) ROOTFS="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
@@ -115,6 +119,44 @@ if [[ -n "$KERNEL_SRC" ]]; then
         sudo ln -sf "initrd.img-$KVER" "$ROOTFS/boot/initrd.img" 2>/dev/null || true
     fi
 
+elif [[ -n "$KERNEL_PKG" ]]; then
+    echo "Installing kernel package from PPA: $KERNEL_PKG"
+
+    if [[ -n "${ROOTFS:-}" && -d "$ROOTFS" ]]; then
+        ROOTFS="$(readlink -f "$ROOTFS")"
+
+        if [[ -n "$KERNEL_PPA" ]]; then
+            echo "Adding PPA: $KERNEL_PPA"
+            # Parse PPA: ppa:OWNER/NAME -> https://ppa.launchpadcontent.net/OWNER/NAME/ubuntu
+            PPA_PATH="${KERNEL_PPA#ppa:}"
+            PPA_URL="https://ppa.launchpadcontent.net/${PPA_PATH}/ubuntu"
+            # Detect suite from existing apt sources
+            SUITE=$(grep -oP '^deb\s+\S+\s+\K[a-z]+' "$ROOTFS/etc/apt/sources.list" 2>/dev/null | head -1)
+            : "${SUITE:=noble}"
+            echo "  PPA URL: $PPA_URL, Suite: $SUITE"
+            echo "deb [trusted=yes] $PPA_URL $SUITE main" | sudo tee "$ROOTFS/etc/apt/sources.list.d/${PPA_PATH//\//-}.list" > /dev/null
+            sudo chroot "$ROOTFS" apt-get update
+        fi
+
+        sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends "$KERNEL_PKG" || {
+            echo "ERROR: Failed to install kernel package: $KERNEL_PKG"
+            exit 1
+        }
+
+        sudo chroot "$ROOTFS" apt-get clean
+        sudo rm -rf "$ROOTFS/var/cache/apt/archives/"*
+        sudo rm -rf "$ROOTFS/var/lib/apt/lists/"*
+
+        if [[ -n "$KERNEL_VERSION" ]]; then
+            KVER="$KERNEL_VERSION"
+        else
+            KVER=$(ls "$ROOTFS/boot/vmlinuz-"* 2>/dev/null | head -1 | sed "s|.*vmlinuz-||")
+        fi
+    else
+        echo "ERROR: --rootfs is required when installing kernel packages"
+        exit 1
+    fi
+
 elif [[ -n "$KERNEL_VERSION" ]]; then
     echo "Installing pre-built kernel package: linux-image-$KERNEL_VERSION"
 
@@ -142,14 +184,14 @@ if [[ -n "${ROOTFS:-}" && -d "$ROOTFS" ]]; then
     sudo chroot "$ROOTFS" apt-get update
 
     if [[ "$DEBARCH" == "amd64" ]]; then
-            KERNEL_PKG="linux-image-generic"
+            DEFAULT_KERNEL_PKG="linux-image-generic"
         elif [[ "$DEBARCH" == "arm64" ]]; then
-            KERNEL_PKG="linux-image-generic-arm64"
+            DEFAULT_KERNEL_PKG="linux-image-generic-arm64"
         else
-            KERNEL_PKG="linux-image-generic"
+            DEFAULT_KERNEL_PKG="linux-image-generic"
         fi
 
-        sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends "$KERNEL_PKG" || {
+        sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends "$DEFAULT_KERNEL_PKG" || {
             echo "ERROR: Failed to install default kernel package"
             exit 1
         }

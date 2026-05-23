@@ -30,6 +30,8 @@ help:
 	@echo "  KERNEL_SRC        - Path to custom kernel source tree [$(KERNEL_SRC)]"
 	@echo "  KERNEL_CONFIG     - Path to kernel .config file [$(KERNEL_CONFIG)]"
 	@echo "  KERNEL_VERSION    - Kernel version string [$(KERNEL_VERSION)]"
+	@echo "  KERNEL_PKG        - Kernel package name (e.g. linux-sonic) [$(KERNEL_PKG)]"
+	@echo "  KERNEL_PPA        - PPA for custom kernel (e.g. ppa:canonical-kernel-team/bootstrap) [$(KERNEL_PPA)]"
 	@echo "  INCLUDE_DEBS      - Space-separated list of .deb files to install [$(INCLUDE_DEBS)]"
 	@echo "  INCLUDE_SOURCE_PKGS - Space-separated source pkg dirs to build and install [$(INCLUDE_SOURCE_PKGS)]"
 	@echo "  V                 - Verbose output (1=on, 0=off) [$(V)]"
@@ -78,6 +80,8 @@ $(STAMPDIR)/kernel: | $(STAMPDIR) $(BUILDDIR)
 		--kernel-src "$(KERNEL_SRC)" \
 		--kernel-config "$(KERNEL_CONFIG)" \
 		--kernel-version "$(KERNEL_VERSION)" \
+		--kernel-pkg "$(KERNEL_PKG)" \
+		--kernel-ppa "$(KERNEL_PPA)" \
 		--builddir "$(KERNEL_DIR)" \
 		--rootfs "$(ROOTFS_DIR)"
 	$(Q)touch $@

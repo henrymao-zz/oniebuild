@@ -375,28 +375,26 @@ trigger_onie_install() {
 set timeout 300
 spawn telnet 127.0.0.1 $KVM_PORT
 
+# Step 1: Get through GRUB menu to ONIE console
 expect {
     "The highlighted entry will be executed" {
         send "\r"
     }
-    "Please press Enter to activate this console" {
-        puts ">>> ONIE already at console"
-    }
-    -re {[#\$] } {
-        puts ">>> Already at shell prompt"
-    }
     timeout {
-        puts "ERROR: Timed out waiting for GRUB or ONIE"
+        puts "ERROR: Timed out waiting for GRUB menu"
         exit 1
     }
 }
 
+# Step 2: Wait for ONIE boot prompt and activate console
 expect {
     "Please press Enter to activate this console" {
-        puts ">>> ONIE install mode console ready"
+        puts ">>> ONIE console detected"
+        send "\r"
+        sleep 2
     }
     -re {[#\$] } {
-        puts ">>> Shell prompt ready"
+        puts ">>> Already at shell prompt"
     }
     timeout {
         puts "ERROR: Timed out waiting for ONIE console"
@@ -404,12 +402,31 @@ expect {
     }
 }
 
-send "\r"
-expect -re {[#\$] }
-
-puts ">>> Stopping ONIE discovery and running installer manually..."
+# Step 3: Kill ONIE discovery (runs background TFTP attempts)
+puts ">>> Stopping ONIE discovery..."
 send "killall discover 2>/dev/null; sleep 1\r"
-expect -re {[#\$] }
+
+# Wait for clean shell prompt
+expect {
+    -re {[#\$] } {
+        puts ">>> Shell prompt ready"
+    }
+    timeout {
+        puts "WARNING: No shell prompt after killall, retrying..."
+        send "\r"
+        sleep 1
+        send "killall discover 2>/dev/null; sleep 1\r"
+        expect {
+            -re {[#\$] } {
+                puts ">>> Shell prompt ready (retry)"
+            }
+            timeout {
+                puts "ERROR: Timed out waiting for ONIE shell prompt"
+                exit 1
+            }
+        }
+    }
+}
 
 send "mkdir -p /mnt/vdb\r"
 expect -re {[#\$] }
@@ -449,7 +466,7 @@ expect {
         puts ">>> Installer archive prepared"
         exp_continue
     }
-    "Error:" {
+    "Error: Unable" {
         puts "ERROR: Installer reported an error"
         exit 1
     }

@@ -26,14 +26,22 @@
 
 # Custom kernel source directory (optional)
 # Set to a linux source tree to compile a custom kernel.
-# Leave empty to install the default Ubuntu kernel package.
+# Leave empty to install from packages.
 # KERNEL_SRC = /path/to/linux-source
 
 # Kernel .config file (optional, used with KERNEL_SRC)
 # KERNEL_CONFIG = /path/to/.config
 
-# Kernel version string (optional, auto-detected from source)
+# Kernel version string (optional, auto-detected from source or boot dir)
 # KERNEL_VERSION = 6.1.0-custom
+
+# Kernel package to install (e.g. linux-sonic from PPA)
+# Only used when KERNEL_SRC is empty. Default: linux-sonic
+# KERNEL_PKG = linux-sonic
+
+# PPA to add before installing kernel package
+# Default: ppa:canonical-kernel-team/bootstrap
+# KERNEL_PPA = ppa:canonical-kernel-team/bootstrap
 
 # Additional .deb packages to install (space-separated paths)
 # INCLUDE_DEBS = packages/debs/my-package.deb packages/debs/other.deb

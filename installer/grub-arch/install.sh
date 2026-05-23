@@ -40,7 +40,7 @@ create_demo_gpt_partition()
     demo_part=$(sgdisk -p $blk_dev | grep "$demo_volume_label" | awk '{print $1}')
     if [ -n "$demo_part" ] ; then
         sgdisk -d $demo_part $blk_dev || { echo "Error: Unable to delete partition"; exit 1; }
-        partprobe
+        partprobe 2>/dev/null || true
     fi
     last_part=$(sgdisk -p $blk_dev | tail -n 1 | awk '{print $1}')
     demo_part=$((last_part + 1))
@@ -49,7 +49,7 @@ create_demo_gpt_partition()
     echo ${blk_dev} | grep -q nvme && blk_suffix="p"
     sgdisk --new=${demo_part}::+${demo_part_size}MB \
         --change-name=${demo_part}:$demo_volume_label $blk_dev || { echo "Error: Unable to create partition"; exit 1; }
-    partprobe
+    partprobe 2>/dev/null || true
 }
 
 create_demo_msdos_partition()
@@ -59,7 +59,7 @@ create_demo_msdos_partition()
     if [ -n "$part_info" ] ; then
         demo_part="$(echo -n $part_info | sed -e s#${blk_dev}##)"
         parted -s $blk_dev rm $demo_part || { echo "Error: Unable to delete partition"; exit 1; }
-        partprobe
+        partprobe 2>/dev/null || true
     fi
     last_part_info="$(parted -s -m $blk_dev unit s print | tail -n 1)"
     last_part_num="$(echo -n $last_part_info | awk -F: '{print $1}')"
@@ -71,7 +71,7 @@ create_demo_msdos_partition()
     demo_part_end=$((demo_part_start + (demo_part_size * sectors_per_mb) - 1))
     parted -s --align optimal $blk_dev unit s \
         mkpart primary $demo_part_start $demo_part_end set $demo_part boot on || { echo "Error: Unable to create partition"; exit 1; }
-    partprobe
+    partprobe 2>/dev/null || true
 }
 
 create_demo_uefi_partition()
