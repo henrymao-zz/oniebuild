@@ -106,6 +106,7 @@ sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends \
     systemd \
     systemd-sysv \
     systemd-resolved \
+    libpam-systemd \
     dbus \
     iproute2 \
     iputils-ping \

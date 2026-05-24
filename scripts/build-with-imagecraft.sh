@@ -142,7 +142,8 @@ sudo rm -rf "$ROOTFS_DIR/usr/share/lintian/"*
 sudo rm -rf "$ROOTFS_DIR/usr/share/common-licenses/"*
 sudo rm -rf "$ROOTFS_DIR/usr/share/pixmaps/"*
 sudo rm -rf "$ROOTFS_DIR/usr/include/"*
-sudo rm -rf "$ROOTFS_DIR/usr/lib/cargo/" 2>/dev/null || true
+# NOTE: Do NOT remove /usr/lib/cargo/ - it contains Rust coreutils binaries
+# that /usr/bin/ symlinks (ls, cp, mv, mkdir, etc.) depend on
 sudo rm -rf "$ROOTFS_DIR/usr/share/bug/"*
 sudo rm -rf "$ROOTFS_DIR/usr/share/linda/"*
 sudo rm -rf "$ROOTFS_DIR/usr/share/doc-base/"*
@@ -176,8 +177,13 @@ fi
 echo "Stripping binaries..."
 sudo find "$ROOTFS_DIR/usr/bin" "$ROOTFS_DIR/usr/sbin" "$ROOTFS_DIR/usr/lib/x86_64-linux-gnu" \
     -type f -executable -not -name "*.sh" -not -name "*.py" 2>/dev/null | while read f; do
-    sudo strip --strip-all "$f" 2>/dev/null || sudo strip --strip-unneeded "$f" 2>/dev/null || true
+    sudo strip --strip-unneeded "$f" 2>/dev/null || true
 done
+
+# Update shared library cache and kernel module dependencies after modifications
+echo "Updating ldconfig and depmod..."
+sudo chroot "$ROOTFS_DIR" ldconfig 2>/dev/null || true
+sudo chroot "$ROOTFS_DIR" depmod -a 2>/dev/null || true
 
 KVER=""
 if [[ -f "$KERNEL_DIR/.kernel_version" ]]; then

@@ -100,7 +100,8 @@ sudo rm -rf "$ROOTFS/usr/share/lintian/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/common-licenses/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/pixmaps/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/include/"* 2>/dev/null || true
-sudo rm -rf "$ROOTFS/usr/lib/cargo/" 2>/dev/null || true
+# NOTE: Do NOT remove /usr/lib/cargo/ - it contains Rust coreutils binaries
+# that /usr/bin/ symlinks (ls, cp, mv, mkdir, etc.) depend on
 sudo rm -rf "$ROOTFS/usr/share/bug/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/linda/"* 2>/dev/null || true
 sudo rm -rf "$ROOTFS/usr/share/doc-base/"* 2>/dev/null || true
@@ -138,8 +139,13 @@ fi
 echo "Stripping binaries..."
 sudo find "$ROOTFS/usr/bin" "$ROOTFS/usr/sbin" "$ROOTFS/usr/lib/x86_64-linux-gnu" \
     -ignore_readdir_race -type f -executable -not -name "*.sh" -not -name "*.py" 2>/dev/null | while read f; do
-    sudo strip --strip-all "$f" 2>/dev/null || sudo strip --strip-unneeded "$f" 2>/dev/null || true
+    sudo strip --strip-unneeded "$f" 2>/dev/null || true
 done
+
+# Update shared library cache and kernel module dependencies after modifications
+echo "Updating ldconfig and depmod..."
+sudo chroot "$ROOTFS" ldconfig 2>/dev/null || true
+sudo chroot "$ROOTFS" depmod -a 2>/dev/null || true
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf $TMP_DIR' EXIT
