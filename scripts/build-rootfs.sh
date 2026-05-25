@@ -154,10 +154,24 @@ sudo rm -rf "$ROOTFS/var/cache/apt/archives/"*
 sudo rm -rf "$ROOTFS/var/cache/apt/*.bin"
 
 sudo chroot "$ROOTFS" bash -c "echo 'root:root' | chpasswd"
+sudo chroot "$ROOTFS" passwd -l root
 
 sudo chroot "$ROOTFS" useradd -m -s /bin/bash admin
 sudo chroot "$ROOTFS" bash -c "echo 'admin:admin' | chpasswd"
 sudo chroot "$ROOTFS" usermod -aG sudo admin
+
+# Grant admin full sudo with no password
+sudo tee "$ROOTFS/etc/sudoers.d/admin" >/dev/null <<'EOF'
+admin ALL=(ALL) NOPASSWD:ALL
+EOF
+sudo chmod 0440 "$ROOTFS/etc/sudoers.d/admin"
+
+# Disable root SSH login (and ensure it takes precedence)
+if grep -q "^PermitRootLogin" "$ROOTFS/etc/ssh/sshd_config"; then
+    sudo sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' "$ROOTFS/etc/ssh/sshd_config"
+else
+    echo "PermitRootLogin no" | sudo tee -a "$ROOTFS/etc/ssh/sshd_config" >/dev/null
+fi
 
 sudo chroot "$ROOTFS" systemctl enable ssh
 sudo chroot "$ROOTFS" systemctl enable systemd-resolved
