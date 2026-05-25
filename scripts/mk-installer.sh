@@ -261,6 +261,15 @@ chmod +x $demo_mnt/install-rootfs.sh
 
 if [ "$firmware" = "uefi" ]; then
     echo "Configuring UEFI boot..."
+    # Create first-stage grub.cfg that chains to NOS grub.cfg (SONiC convention)
+    if mount | grep -q "/boot/efi"; then
+        mkdir -p /boot/efi/EFI/debian/
+        cat <<EOF > /boot/efi/EFI/debian/grub.cfg
+search --no-floppy --label --set=root $demo_volume_label
+set prefix=(\$root)'/grub'
+configfile \$prefix/grub.cfg
+EOF
+    fi
     if [ -x /usr/sbin/grub-install ]; then
         grub-install --no-nvram \
             --bootloader-id="$demo_volume_label" \
@@ -290,43 +299,63 @@ fi
 echo "Creating GRUB configuration..."
 grub_cfg=$(mktemp)
 [ -r /etc/machine.conf ] && . /etc/machine.conf
-[ -r $demo_mnt/../onie/grub/grub-variables ] && . $demo_mnt/../onie/grub/grub-variables 2>/dev/null || true
+onie_root_dir=/mnt/onie-boot/onie
+[ -r ${onie_root_dir}/grub/grub-variables ] && . ${onie_root_dir}/grub/grub-variables 2>/dev/null || true
 
 GRUB_CMDLINE_LINUX="${GRUB_CMDLINE_LINUX:-console=tty0 console=ttyS0,115200n8}"
 
 cat <<EOF > $grub_cfg
 serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1
-terminal_input serial
-terminal_output serial
+terminal_input console serial
+terminal_output console serial
 
 set timeout=5
 
 if [ -s \$prefix/grubenv ]; then
   load_env
 fi
+if [ "\${saved_entry}" ]; then
+   set default="\${saved_entry}"
+fi
 if [ "\${next_entry}" ] ; then
    set default="\${next_entry}"
    set next_entry=
    save_env next_entry
 fi
+if [ "\${onie_entry}" ]; then
+   set next_entry="\${default}"
+   set default="\${onie_entry}"
+   unset onie_entry
+   save_env onie_entry next_entry
+fi
 
 menuentry '$demo_volume_label' --unrestricted {
         search --no-floppy --label --set=root $demo_volume_label
         echo    'Loading kernel ...'
-        linux   /boot/vmlinuz $GRUB_CMDLINE_LINUX DEMO_TYPE=OS
+        insmod gzio
+        insmod part_msdos
+        insmod ext2
+        linux   /boot/vmlinuz root=LABEL=$demo_volume_label rw $GRUB_CMDLINE_LINUX DEMO_TYPE=OS
         echo    'Loading initial ramdisk ...'
         initrd  /boot/initrd.img
 }
 
 EOF
 
-if [ -x $demo_mnt/../onie/grub.d/50_onie_grub ]; then
-    $demo_mnt/../onie/grub.d/50_onie_grub >> $grub_cfg 2>/dev/null || true
+onie_grub_script="${onie_root_dir}/grub.d/50_onie_grub"
+if [ -x "$onie_grub_script" ]; then
+    "$onie_grub_script" >> $grub_cfg 2>/dev/null || true
 fi
 
 mkdir -p $demo_mnt/grub
 cp $grub_cfg $demo_mnt/grub/grub.cfg
 rm -f $grub_cfg
+
+# Create blank grubenv for grub-reboot support
+if [ ! -f "$demo_mnt/grub/grubenv" ]; then
+    grub-editenv "$demo_mnt/grub/grubenv" create 2>/dev/null || \
+    dd if=/dev/zero of="$demo_mnt/grub/grubenv" bs=1024 count=1 2>/dev/null || true
+fi
 
 onie-support $demo_mnt 2>/dev/null || true
 

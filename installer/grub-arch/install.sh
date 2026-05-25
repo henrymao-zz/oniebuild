@@ -22,6 +22,10 @@ fi
 onie_partition_type=$(onie-sysinfo -t)
 demo_part_size=${part_size:-4096}
 
+# ONIE persistent directory on the ONIE-BOOT partition
+onie_boot_mnt=/mnt/onie-boot
+onie_root_dir=${onie_boot_mnt}/onie
+
 if [ "$firmware" = "uefi" ] ; then
     create_demo_partition="create_demo_uefi_partition"
 elif [ "$onie_partition_type" = "gpt" ] ; then
@@ -126,45 +130,103 @@ fi
 
 [ -r ./platform.conf ] && . ./platform.conf
 
-if [ -r $onie_root_dir/grub/grub-variables ] ; then
-    . $onie_root_dir/grub/grub-variables 2>/dev/null || true
-fi
+# Source ONIE grub variables if available
+[ -r ${onie_root_dir}/grub/grub-variables ] && \
+    . ${onie_root_dir}/grub/grub-variables 2>/dev/null || true
 
 GRUB_CMDLINE_LINUX="${GRUB_CMDLINE_LINUX:-console=tty0 console=ttyS0,115200n8}"
+export GRUB_CMDLINE_LINUX
+
+# Detect console port/speed from ONIE environment (match SONiC pattern)
+CONSOLE_PORT=${CONSOLE_PORT:-0x3f8}
+CONSOLE_DEV=${CONSOLE_DEV:-0}
+CONSOLE_SPEED=${CONSOLE_SPEED:-115200}
+if [ -r /proc/cmdline ]; then
+    console_ttys=$(cat /proc/cmdline | grep -Eo 'console=ttyS[0-9]+' | cut -d "=" -f2)
+    if [ -n "$console_ttys" ]; then
+        case "$console_ttys" in
+            ttyS0) CONSOLE_PORT=0x3f8; CONSOLE_DEV=0 ;;
+            ttyS1) CONSOLE_PORT=0x2f8; CONSOLE_DEV=1 ;;
+            ttyS2) CONSOLE_PORT=0x3e8; CONSOLE_DEV=2 ;;
+            ttyS3) CONSOLE_PORT=0x2e8; CONSOLE_DEV=3 ;;
+        esac
+    fi
+    speed=$(cat /proc/cmdline | grep -Eo 'console=ttyS[0-9]+,[0-9]+' | cut -d "," -f2)
+    [ -n "$speed" ] && CONSOLE_SPEED=$speed
+fi
 
 grub_cfg=$(mktemp)
 
+# Set GRUB serial/terminal based on ONIE conventions or defaults
+GRUB_SERIAL_COMMAND="serial --port=${CONSOLE_PORT} --speed=${CONSOLE_SPEED} --word=8 --parity=no --stop=1"
+GRUB_TERMINAL_INPUT="console serial"
+GRUB_TERMINAL_OUTPUT="console serial"
+
+# Common preamble: serial, timeout, grubenv support, grub-reboot support
 cat <<EOF > $grub_cfg
-serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1
-terminal_input serial
-terminal_output serial
+$GRUB_SERIAL_COMMAND
+terminal_input $GRUB_TERMINAL_INPUT
+terminal_output $GRUB_TERMINAL_OUTPUT
 
 set timeout=5
 
 if [ -s \$prefix/grubenv ]; then
-  load_env
+    load_env
 fi
-if [ "\${next_entry}" ] ; then
-   set default="\${next_entry}"
-   set next_entry=
-   save_env next_entry
+if [ "\${saved_entry}" ]; then
+    set default="\${saved_entry}"
 fi
+if [ "\${next_entry}" ]; then
+    set default="\${next_entry}"
+    unset next_entry
+    save_env next_entry
+fi
+if [ "\${onie_entry}" ]; then
+    set next_entry="\${default}"
+    set default="\${onie_entry}"
+    unset onie_entry
+    save_env onie_entry next_entry
+fi
+EOF
 
-menuentry 'Ubuntu $demo_type' --unrestricted {
+# NOS menu entry
+nos_menuentry="$demo_volume_label"
+cat <<EOF >> $grub_cfg
+menuentry '${nos_menuentry}' --unrestricted {
         search --no-floppy --label --set=root $demo_volume_label
-        echo    'Loading Ubuntu $demo_type kernel ...'
-        linux   /demo.vmlinuz root=LABEL=$demo_volume_label $GRUB_CMDLINE_LINUX \$ONIE_EXTRA_CMDLINE_LINUX DEMO_TYPE=$demo_type
-        echo    'Loading Ubuntu $demo_type initial ramdisk ...'
+        echo    'Loading ${nos_menuentry} kernel ...'
+        insmod gzio
+        insmod part_msdos
+        insmod ext2
+        linux   /demo.vmlinuz root=LABEL=$demo_volume_label rw $GRUB_CMDLINE_LINUX \$ONIE_EXTRA_CMDLINE_LINUX DEMO_TYPE=$demo_type
+        echo    'Loading ${nos_menuentry} initial ramdisk ...'
         initrd  /demo.initrd
 }
 EOF
 
-if [ -x $onie_root_dir/grub.d/50_onie_grub ]; then
-    $onie_root_dir/grub.d/50_onie_grub >> $grub_cfg 2>/dev/null || true
+# Append ONIE menu entries from ONIE boot partition (preserves ONIE boot option)
+onie_grub_script="${onie_root_dir}/grub.d/50_onie_grub"
+if [ -x "$onie_grub_script" ]; then
+    echo "Adding ONIE menu entries from $onie_grub_script"
+    "$onie_grub_script" >> $grub_cfg 2>/dev/null || true
+else
+    echo "WARNING: ONIE grub script not found at $onie_grub_script"
 fi
 
 if [ "$firmware" = "uefi" ] ; then
     echo "Configuring UEFI boot..."
+    # Create first-stage grub.cfg in the EFI system partition that chains
+    # to the full grub.cfg on the NOS partition (SONiC convention)
+    if mount | grep -q "/boot/efi"; then
+        mkdir -p /boot/efi/EFI/debian/
+        cat <<EOF > /boot/efi/EFI/debian/grub.cfg
+search --no-floppy --label --set=root $demo_volume_label
+set prefix=(\$root)'/grub'
+configfile \$prefix/grub.cfg
+EOF
+        echo "Created EFI first-stage grub.cfg at /boot/efi/EFI/debian/grub.cfg"
+    fi
+
     grub-install --no-nvram \
         --bootloader-id="$demo_volume_label" \
         --efi-directory="/boot/efi" \
@@ -192,8 +254,19 @@ else
         --recheck "$blk_dev" 2>/dev/null || true
 fi
 
+# Install full grub.cfg and create blank grubenv for grub-reboot support
 mkdir -p $demo_mnt/grub
 cp $grub_cfg $demo_mnt/grub/grub.cfg
+echo "Installed grub.cfg to $demo_mnt/grub/grub.cfg"
+
+if [ ! -f "$demo_mnt/grub/grubenv" ]; then
+    grub-editenv "$demo_mnt/grub/grubenv" create 2>/dev/null || {
+        # Fallback: create empty grubenv if grub-editenv not available
+        dd if=/dev/zero of="$demo_mnt/grub/grubenv" bs=1024 count=1 2>/dev/null || true
+    }
+    echo "Created grubenv for grub-reboot support"
+fi
+
 rm -f $grub_cfg
 
 onie-support $demo_mnt 2>/dev/null || true
