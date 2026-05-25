@@ -502,16 +502,13 @@ expect {
     }
 }
 
-send "root\r"
+send "admin\r"
 
 expect {
-    -re {[#\$] } {
-        puts ">>> Logged in as root"
-    }
     "Password:" {
-        send "root\r"
+        send "admin\r"
         expect -re {[#\$] }
-        puts ">>> Logged in as root (password)"
+        puts ">>> Logged in as admin"
     }
     timeout {
         puts "ERROR: Could not login"
@@ -519,7 +516,7 @@ expect {
     }
 }
 
-send "cat /etc/os-release\r"
+send "sudo cat /etc/os-release\r"
 expect -re {[#\$] }
 
 send "uptime\r"
@@ -528,7 +525,10 @@ expect -re {[#\$] }
 send "uname -a\r"
 expect -re {[#\$] }
 
-send "ip addr show\r"
+send "sudo ip addr show\r"
+expect -re {[#\$] }
+
+send "sudo systemctl is-active systemd-logind\r"
 expect -re {[#\$] }
 
 puts ">>> NOS verification PASSED"
@@ -613,7 +613,7 @@ do_run() {
     fi
 
     echo "Booting NOS VM..."
-    echo "  SSH: ssh root@localhost -p $SSH_FWD_PORT"
+    echo "  SSH: ssh admin@localhost -p $SSH_FWD_PORT"
     echo "  Serial: telnet 127.0.0.1 $KVM_PORT"
     echo "  VNC: vncviewer :$VNC_PORT"
     echo "  Press Ctrl+C to stop"
@@ -685,7 +685,7 @@ do_test() {
     echo "========================================="
     echo "  VM disk: $DISK"
     echo "  Boot with: $(basename "$0") run"
-    echo "  SSH:      ssh root@localhost -p $SSH_FWD_PORT"
+    echo "  SSH:      ssh admin@localhost -p $SSH_FWD_PORT"
 }
 
 do_test_quick() {
@@ -737,7 +737,7 @@ do_test_quick() {
     echo "========================================="
     echo "  VM disk: $DISK"
     echo "  Boot with: $(basename "$0") run"
-    echo "  SSH:      ssh root@localhost -p $SSH_FWD_PORT"
+    echo "  SSH:      ssh admin@localhost -p $SSH_FWD_PORT"
 }
 
 parse_args "$@"
