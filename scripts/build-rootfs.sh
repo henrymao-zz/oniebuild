@@ -174,6 +174,13 @@ else
     echo "PermitRootLogin no" | sudo tee -a "$ROOTFS/etc/ssh/sshd_config" >/dev/null
 fi
 
+sudo mkdir -p "$ROOTFS/lib/oniecraft"
+sudo touch "$ROOTFS/lib/oniecraft/firsttime"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+sudo cp "$SCRIPT_DIR/../files/rc.local" "$ROOTFS/etc/rc.local"
+sudo chmod +x "$ROOTFS/etc/rc.local"
+
 sudo chroot "$ROOTFS" systemctl enable ssh
 sudo chroot "$ROOTFS" systemctl enable systemd-resolved
 sudo chroot "$ROOTFS" systemctl enable systemd-networkd

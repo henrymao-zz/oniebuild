@@ -157,7 +157,7 @@ TMP_DIR=$(mktemp -d)
 trap 'rm -rf $TMP_DIR' EXIT
 
 echo "Creating tar.gz rootfs (excluding boot/)..."
-sudo tar -czf "$TMP_DIR/fs.tar.gz" -C "$ROOTFS" --exclude='./boot' --exclude='./packages' --exclude='./var/cache/apt' --exclude='./var/lib/apt/lists' --exclude='./usr/share/doc' --exclude='./usr/share/man' --exclude='./usr/share/info' --exclude='./usr/share/locale' --exclude='./usr/include' .
+sudo tar --xattrs --xattrs-include='*' -czf "$TMP_DIR/fs.tar.gz" -C "$ROOTFS" --exclude='./boot' --exclude='./packages' --exclude='./var/cache/apt' --exclude='./var/lib/apt/lists' --exclude='./usr/share/doc' --exclude='./usr/share/man' --exclude='./usr/share/info' --exclude='./usr/share/locale' --exclude='./usr/include' .
 
 INSTALLER_TMP="$TMP_DIR/installer"
 mkdir -p "$INSTALLER_TMP"

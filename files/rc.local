@@ -1,0 +1,12 @@
+#!/bin/sh
+
+FIRSTTIME_FLAG=/lib/oniecraft/firsttime
+
+if [ -f "$FIRSTTIME_FLAG" ]; then
+    echo "oniecraft: running first-time initialization..."
+    /usr/sbin/setcap cap_net_raw=ep /usr/bin/ping 2>/dev/null || true
+    rm -f "$FIRSTTIME_FLAG"
+    echo "oniecraft: first-time initialization complete"
+fi
+
+exit 0
