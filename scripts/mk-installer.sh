@@ -174,205 +174,14 @@ else
     INSTALL_ARCH_DIR="$INSTALLER_DIR/u-boot-arch"
 fi
 
+cp "$SCRIPT_DIR/../files/install.sh" "$INSTALLER_TMP/install.sh"
+
 if [[ -d "$INSTALL_ARCH_DIR" ]]; then
-    cp -r "$INSTALL_ARCH_DIR/"* "$INSTALLER_TMP/"
-else
-    echo "WARNING: Installer arch directory not found: $INSTALL_ARCH_DIR"
-    echo "Creating minimal install.sh"
-    cat > "$INSTALLER_TMP/install.sh" <<'INSTALL_EOF'
-#!/bin/sh
-set -e
-
-cd $(dirname $0)
-. ./machine.conf
-
-echo "Installer: platform=$platform"
-
-blk_dev=$(blkid | grep ONIE-BOOT | awk '{print $1}' | sed -e 's/[1-9][0-9]*:.*$//' | sed -e 's/\([0-9]\)\(p\)/\1/' | head -n 1)
-[ -b "$blk_dev" ] || { echo "Error: Unable to find ONIE block device"; exit 1; }
-
-PART_SIZE=${PART_SIZE:-4096}
-demo_volume_label="UBUNTU-NOS"
-
-if [ -d "/sys/firmware/efi/efivars" ]; then
-    firmware="uefi"
-else
-    firmware="bios"
-fi
-
-onie_partition_type=$(onie-sysinfo -t)
-
-if [ "$onie_partition_type" = "gpt" ]; then
-    demo_part=$(sgdisk -p $blk_dev | grep "$demo_volume_label" | awk '{print $1}')
-    if [ -n "$demo_part" ]; then
-        sgdisk -d $demo_part $blk_dev || exit 1
-        partprobe
-    fi
-    last_part=$(sgdisk -p $blk_dev | tail -n 1 | awk '{print $1}')
-    demo_part=$((last_part + 1))
-    blk_suffix=
-    echo ${blk_dev} | grep -q mmcblk && blk_suffix="p"
-    echo ${blk_dev} | grep -q nvme && blk_suffix="p"
-    sgdisk --new=${demo_part}::+${PART_SIZE}MB \
-        --change-name=${demo_part}:$demo_volume_label $blk_dev || exit 1
-    partprobe
-elif [ "$onie_partition_type" = "msdos" ]; then
-    part_info="$(blkid | grep $demo_volume_label | awk -F: '{print $1}')"
-    if [ -n "$part_info" ]; then
-        demo_part="$(echo -n $part_info | sed -e s#${blk_dev}##)"
-        parted -s $blk_dev rm $demo_part || exit 1
-        partprobe
-    fi
-    last_part_info="$(parted -s -m $blk_dev unit s print | tail -n 1)"
-    last_part_num="$(echo -n $last_part_info | awk -F: '{print $1}')"
-    last_part_end="$(echo -n $last_part_info | awk -F: '{print $3}')"
-    last_part_end=${last_part_end%s}
-    demo_part=$((last_part_num + 1))
-    demo_part_start=$((last_part_end + 1))
-    sectors_per_mb=2048
-    demo_part_end=$((demo_part_start + (PART_SIZE * sectors_per_mb) - 1))
-    parted -s --align optimal $blk_dev unit s \
-        mkpart primary $demo_part_start $demo_part_end set $demo_part boot on || exit 1
-    partprobe
-fi
-
-demo_dev=$(echo $blk_dev | sed -e 's/\(mmcblk[0-9]\)/\1p/')$demo_part
-echo $blk_dev | grep -q nvme && {
-    demo_dev=$(echo $blk_dev | sed -e 's/\(nvme[0-9]n[0-9]\)/\1p/')$demo_part
-}
-partprobe
-
-mkfs.ext4 -F -L $demo_volume_label $demo_dev || exit 1
-
-demo_mnt=$(mktemp -d) || exit 1
-mount -t ext4 -o defaults,rw $demo_dev $demo_mnt || exit 1
-
-mkdir -p $demo_mnt/boot
-cp boot/vmlinuz boot/initrd.img $demo_mnt/boot/
-
-cp fs.tar.gz $demo_mnt/
-
-cat > $demo_mnt/install-rootfs.sh <<'ROOTFS_EOF'
-#!/bin/sh
-set -e
-
-demo_mnt="$1"
-
-echo "Extracting rootfs..."
-tar -xzf "$demo_mnt/fs.tar.gz" -C "$demo_mnt/"
-
-rm -f "$demo_mnt/fs.tar.gz" "$demo_mnt/install-rootfs.sh"
-ROOTFS_EOF
-chmod +x $demo_mnt/install-rootfs.sh
-
-if [ "$firmware" = "uefi" ]; then
-    echo "Configuring UEFI boot..."
-    # Create first-stage grub.cfg that chains to NOS grub.cfg (SONiC convention)
-    if mount | grep -q "/boot/efi"; then
-        mkdir -p /boot/efi/EFI/debian/
-        cat <<EOF > /boot/efi/EFI/debian/grub.cfg
-search --no-floppy --label --set=root $demo_volume_label
-set prefix=(\$root)'/grub'
-configfile \$prefix/grub.cfg
-EOF
-    fi
-    if [ -x /usr/sbin/grub-install ]; then
-        grub-install --no-nvram \
-            --bootloader-id="$demo_volume_label" \
-            --efi-directory="/boot/efi" \
-            --boot-directory="$demo_mnt" \
-            --recheck "$blk_dev" 2>/dev/null || true
-    fi
-
-    for b in $(efibootmgr | grep "$demo_volume_label" | awk '{ print $1 }'); do
-        num=${b#Boot}
-        num=${num%\*}
-        efibootmgr -b $num -B > /dev/null 2>&1
+    for f in "$INSTALL_ARCH_DIR/"*; do
+        if [[ "$(basename "$f")" != "install.sh" ]]; then
+            cp -r "$f" "$INSTALLER_TMP/"
+        fi
     done
-    efibootmgr --quiet --create \
-        --label "$demo_volume_label" \
-        --disk $blk_dev --part $demo_part \
-        --loader "/EFI/$demo_volume_label/grubx64.efi" 2>/dev/null || true
-else
-    echo "Configuring BIOS boot..."
-    if [ -x /usr/sbin/grub-install ]; then
-        grub-install --target=i386-pc \
-            --boot-directory="$demo_mnt" \
-            --recheck "$blk_dev" 2>/dev/null || true
-    fi
-fi
-
-echo "Creating GRUB configuration..."
-grub_cfg=$(mktemp)
-[ -r /etc/machine.conf ] && . /etc/machine.conf
-onie_root_dir=/mnt/onie-boot/onie
-[ -r ${onie_root_dir}/grub/grub-variables ] && . ${onie_root_dir}/grub/grub-variables 2>/dev/null || true
-
-GRUB_CMDLINE_LINUX="${GRUB_CMDLINE_LINUX:-console=tty0 console=ttyS0,115200n8}"
-
-cat <<EOF > $grub_cfg
-serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1
-terminal_input console serial
-terminal_output console serial
-
-set timeout=5
-
-if [ -s \$prefix/grubenv ]; then
-  load_env
-fi
-if [ "\${saved_entry}" ]; then
-   set default="\${saved_entry}"
-fi
-if [ "\${next_entry}" ] ; then
-   set default="\${next_entry}"
-   set next_entry=
-   save_env next_entry
-fi
-if [ "\${onie_entry}" ]; then
-   set next_entry="\${default}"
-   set default="\${onie_entry}"
-   unset onie_entry
-   save_env onie_entry next_entry
-fi
-
-menuentry 'Ubuntu NOS' --unrestricted {
-        search --no-floppy --label --set=root UBUNTU-NOS
-        echo    'Loading kernel ...'
-        insmod gzio
-        insmod part_msdos
-        insmod ext2
-        linux   /boot/vmlinuz root=LABEL=UBUNTU-NOS rw $GRUB_CMDLINE_LINUX DEMO_TYPE=OS
-        echo    'Loading initial ramdisk ...'
-        initrd  /boot/initrd.img
-}
-
-EOF
-
-onie_grub_script="${onie_root_dir}/grub.d/50_onie_grub"
-if [ -x "$onie_grub_script" ]; then
-    "$onie_grub_script" >> $grub_cfg 2>/dev/null || true
-fi
-
-mkdir -p $demo_mnt/grub
-cp $grub_cfg $demo_mnt/grub/grub.cfg
-rm -f $grub_cfg
-
-# Create blank grubenv for grub-reboot support
-if [ ! -f "$demo_mnt/grub/grubenv" ]; then
-    grub-editenv "$demo_mnt/grub/grubenv" create 2>/dev/null || \
-    dd if=/dev/zero of="$demo_mnt/grub/grubenv" bs=1024 count=1 2>/dev/null || true
-fi
-
-onie-support $demo_mnt 2>/dev/null || true
-
-umount $demo_mnt || true
-
-if [ -x /bin/onie-nos-mode ]; then
-    /bin/onie-nos-mode -s
-fi
-
-echo "Installation complete."
-INSTALL_EOF
 fi
 
 cat > "$INSTALLER_TMP/machine.conf" <<EOF
@@ -386,10 +195,8 @@ git_rev=$GIT_REV
 part_size=$PART_SIZE
 EOF
 
-if [[ -f "$INSTALLER_TMP/install.sh" ]]; then
-    sed -i -e "s/%%DEMO_TYPE%%/OS/g" "$INSTALLER_TMP/install.sh"
-    chmod +x "$INSTALLER_TMP/install.sh"
-fi
+sed -i -e "s/%%DEMO_TYPE%%/OS/g" "$INSTALLER_TMP/install.sh"
+chmod +x "$INSTALLER_TMP/install.sh"
 
 SHARCH="$TMP_DIR/sharch.tar"
 tar -C "$TMP_DIR" -cf "$SHARCH" installer || {
