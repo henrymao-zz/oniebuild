@@ -27,7 +27,7 @@ rootfs → kernel → packages → image
 
 ```bash
 sudo apt install -y make debootstrap squashfs-tools zstd mtools \
-  qemu-system-x86 qemu-img expect sshpass
+  qemu-system-x86 qemu-utils expect sshpass
 ```
 
 For ARM64 cross-builds:
@@ -37,7 +37,7 @@ sudo apt install -y qemu-user-static gcc-aarch64-linux-gnu
 
 For VM testing:
 ```bash
-sudo apt install -y qemu-system-x86 qemu-img expect ovmf
+sudo apt install -y qemu-system-x86 qemu-utils expect ovmf
 ```
 
 ### Workshop Build (containerized)
