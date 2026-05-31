@@ -5,7 +5,29 @@ set -e
 cd $(dirname $0)
 . ./machine.conf
 
+read_conf_file() {
+    local conf_file=$1
+    while IFS='=' read -r var value || [ -n "$var" ]
+    do
+        var=$(echo $var | tr -d '\r\n')
+        value=$(echo $value | tr -d '\r\n')
+        var=${var%#*}
+        value=${value%#*}
+        [ -z "$var" ] && continue
+        tmp_val=${value#\"}
+        value=${tmp_val%\"}
+        eval "$var=\"$value\""
+    done < "$conf_file"
+}
+
+if [ -r /etc/machine.conf ]; then
+    read_conf_file "/etc/machine.conf"
+elif [ -r /host/machine.conf ]; then
+    read_conf_file "/host/machine.conf"
+fi
+
 echo "Installer: platform=$platform"
+echo "onie_platform: ${onie_platform:-unknown}"
 
 demo_type="%%DEMO_TYPE%%"
 demo_volume_label="UBUNTU-NOS"
@@ -130,11 +152,17 @@ fi
 echo "Generating machine.conf from ONIE runtime variables..."
 if [ -f /etc/machine-build.conf ]; then
     set | grep ^onie | sed -e "s/='/=/" -e "s/'$//" > $demo_mnt/etc/machine.conf
-elif [ -f /etc/machine.conf ]; then
-    cp /etc/machine.conf $demo_mnt/etc/machine.conf
 else
     cp ./machine.conf $demo_mnt/etc/machine.conf
 fi
+cat >> $demo_mnt/etc/machine.conf <<EOF
+nos_name=$nos_name
+nos_version=$nos_version
+nos_arch=$nos_arch
+git_branch=${git_branch:-}
+git_rev=${git_rev:-}
+part_size=$part_size
+EOF
 
 [ -r ./platform.conf ] && . ./platform.conf
 
