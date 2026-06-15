@@ -125,7 +125,8 @@ sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends \
     net-tools \
     netplan.io \
     fancontrol \
-    vim
+    vim \
+    bird3
 
 if [[ "$DEBARCH" == "arm64" ]]; then
     sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends \
@@ -184,6 +185,23 @@ sudo chmod +x "$ROOTFS/etc/rc.local"
 sudo chroot "$ROOTFS" systemctl enable ssh
 sudo chroot "$ROOTFS" systemctl enable systemd-resolved
 sudo chroot "$ROOTFS" systemctl enable systemd-networkd
+sudo chroot "$ROOTFS" systemctl enable bird3
+
+sudo tee "$ROOTFS/etc/bird/bird.conf" >/dev/null <<'BIRDCONF'
+log syslog all;
+
+router id 127.0.0.1;
+
+protocol device {
+}
+
+protocol kernel {
+    ipv4 {
+        import none;
+        export all;
+    };
+}
+BIRDCONF
 
 sudo mkdir -p "$ROOTFS/etc/netplan"
 sudo tee "$ROOTFS/etc/netplan/01-netcfg.yaml" >/dev/null <<'EOF'
