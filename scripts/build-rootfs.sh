@@ -124,6 +124,7 @@ sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends \
     zstd \
     net-tools \
     netplan.io \
+    snapd \
     fancontrol \
     vim \
     bird3
@@ -185,7 +186,9 @@ sudo chmod +x "$ROOTFS/etc/rc.local"
 sudo chroot "$ROOTFS" systemctl enable ssh
 sudo chroot "$ROOTFS" systemctl enable systemd-resolved
 sudo chroot "$ROOTFS" systemctl enable systemd-networkd
-sudo chroot "$ROOTFS" systemctl enable bird3
+sudo chroot "$ROOTFS" systemctl enable bird
+sudo chroot "$ROOTFS" systemctl enable snapd.socket 2>/dev/null || true
+sudo chroot "$ROOTFS" systemctl enable apparmor 2>/dev/null || true
 
 sudo tee "$ROOTFS/etc/bird/bird.conf" >/dev/null <<'BIRDCONF'
 log syslog all;
