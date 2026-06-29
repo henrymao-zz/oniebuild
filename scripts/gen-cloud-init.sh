@@ -27,16 +27,18 @@ FILES_DIR="$(readlink -f "$FILES_DIR")"
 OUTPUT_DIR="$(dirname "$OUTPUT")"
 mkdir -p "$OUTPUT_DIR"
 
-# Collect (path, source-file) pairs to embed as write_files entries.
-# Each entry: target path inside rootfs | source file relative to FILES_DIR
+# Collect (path, source-file, permissions) triples to embed as write_files entries.
+# Each entry: target path | source file relative to FILES_DIR | permissions
 ENTRIES=(
-    "/etc/bird/bird.conf|etc/bird/bird.conf"
+    "/etc/bird/bird.conf|etc/bird/bird.conf|0644"
+    "/usr/sbin/nos-setup.sh|nos-setup.sh|0755"
 )
 
 # Generate YAML for a single write_files entry, indenting file content.
 write_entry() {
     local target="$1"
     local src="$2"
+    local perms="$3"
 
     if [[ ! -f "$src" ]]; then
         echo "WARNING: source file not found: $src (skipping)" >&2
@@ -44,7 +46,7 @@ write_entry() {
     fi
 
     echo "        - path: $target"
-    echo "          permissions: '0644'"
+    echo "          permissions: '$perms'"
     echo "          owner: root:root"
     echo "          content: |"
     # Indent each line of the source file by 12 spaces
@@ -54,6 +56,7 @@ write_entry() {
 }
 
 {
+    echo "datasource_list: [ NoCloud, None ]"
     echo "datasource:"
     echo "  NoCloud:"
     echo "    user-data: |"
@@ -62,10 +65,15 @@ write_entry() {
 
     for entry in "${ENTRIES[@]}"; do
         target="${entry%%|*}"
-        rel="${entry#*|}"
+        rest="${entry#*|}"
+        rel="${rest%%|*}"
+        perms="${rest##*|}"
         src="$FILES_DIR/$rel"
-        write_entry "$target" "$src"
+        write_entry "$target" "$src" "$perms"
     done
+
+    echo "      runcmd:"
+    echo "        - /usr/sbin/nos-setup.sh"
 
     echo "    meta-data: |"
     echo "      instance-id: ${NOS_NAME,,}"

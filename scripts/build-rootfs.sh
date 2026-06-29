@@ -178,14 +178,10 @@ else
 fi
 
 sudo mkdir -p "$ROOTFS/lib/oniecraft"
-sudo touch "$ROOTFS/lib/oniecraft/firsttime"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 FILES_DIR="$PROJECT_DIR/files"
-
-sudo cp "$FILES_DIR/rc.local" "$ROOTFS/etc/rc.local"
-sudo chmod +x "$ROOTFS/etc/rc.local"
 
 sudo chroot "$ROOTFS" systemctl enable ssh
 sudo chroot "$ROOTFS" systemctl enable systemd-resolved
