@@ -199,8 +199,10 @@ sudo chroot "$ROOTFS" systemctl enable cloud-config.service 2>/dev/null || true
 sudo chroot "$ROOTFS" systemctl enable cloud-final.service 2>/dev/null || true
 
 sudo mkdir -p "$ROOTFS/etc/cloud/cloud.cfg.d"
-sudo cp "$FILES_DIR/etc/cloud/cloud.cfg.d/99-oniecraft-nocloud.cfg" \
-    "$ROOTFS/etc/cloud/cloud.cfg.d/99-oniecraft-nocloud.cfg"
+sudo "$FILES_DIR/../scripts/gen-cloud-init.sh" \
+    --files-dir "$FILES_DIR" \
+    --output "$ROOTFS/etc/cloud/cloud.cfg.d/99-oniecraft-nocloud.cfg" \
+    --nos-name "$NOS_NAME"
 
 sudo mkdir -p "$ROOTFS/etc/systemd/system/docker.service.d"
 sudo cp "$FILES_DIR/etc/systemd/system/docker.service.d/override.conf" \
