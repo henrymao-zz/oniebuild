@@ -166,6 +166,18 @@ sudo cp "$VMLINUZ" "$INSTALLER_TMP/demo.vmlinuz"
 sudo cp "$INITRD" "$INSTALLER_TMP/demo.initrd"
 sudo chmod a+r "$INSTALLER_TMP/demo.vmlinuz" "$INSTALLER_TMP/demo.initrd"
 
+# Include System.map and kernel config so they're available at runtime.
+SYSTEM_MAP="$ROOTFS/boot/System.map-$KVER"
+KERNEL_CONFIG="$ROOTFS/boot/config-$KVER"
+if [[ -f "$SYSTEM_MAP" ]]; then
+    sudo cp "$SYSTEM_MAP" "$INSTALLER_TMP/System.map-$KVER"
+    sudo chmod a+r "$INSTALLER_TMP/System.map-$KVER"
+fi
+if [[ -f "$KERNEL_CONFIG" ]]; then
+    sudo cp "$KERNEL_CONFIG" "$INSTALLER_TMP/config-$KVER"
+    sudo chmod a+r "$INSTALLER_TMP/config-$KVER"
+fi
+
 cp "$TMP_DIR/fs.tar.gz" "$INSTALLER_TMP/fs.tar.gz"
 
 if [[ "$BOOTLOADER" == "grub" ]]; then

@@ -72,6 +72,7 @@ write_entry() {
         write_entry "$target" "$src" "$perms"
     done
 
+    echo "      locale: en_US.UTF-8"
     echo "      runcmd:"
     echo "        - /usr/sbin/nos-setup.sh"
 

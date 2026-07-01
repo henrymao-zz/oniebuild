@@ -48,8 +48,8 @@ echo "nos-setup: onie_switch_asic=${ONIE_SWITCH_ASIC:-unknown}"
 if [ "$ONIE_SWITCH_ASIC" = "bcm" ]; then
     BCM_DIR="/usr/share/sonic/platform/bcm"
     echo "nos-setup: installing opennsl from $BCM_DIR..."
-    if ls "$BCM_DIR"/opennsl_*.deb >/dev/null 2>&1; then
-        dpkg -i "$BCM_DIR"/opennsl_*.deb
+    if ls "$BCM_DIR"/opennsl-modules_*.deb >/dev/null 2>&1; then
+        dpkg -i "$BCM_DIR"/opennsl-modules_*.deb
     else
         echo "nos-setup: WARNING, no opennsl .deb found in $BCM_DIR"
     fi

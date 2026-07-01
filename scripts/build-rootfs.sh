@@ -157,9 +157,9 @@ sudo chown root:root "$S5232F_PLATFORM_DIR"/*.deb
 # Download the opennsl .deb from the PPA and stage it under the bcm platform dir.
 BCM_PLATFORM_DIR="$ROOTFS/usr/share/sonic/platform/bcm"
 sudo mkdir -p "$BCM_PLATFORM_DIR"
-echo "Downloading opennsl .deb from PPA..."
-sudo chroot "$ROOTFS" bash -c "cd /tmp && apt-get download opennsl"
-sudo mv "$ROOTFS"/tmp/opennsl_*.deb "$BCM_PLATFORM_DIR/"
+echo "Downloading opennsl-modules .deb from PPA..."
+sudo chroot "$ROOTFS" bash -c "cd /tmp && apt-get download opennsl-modules"
+sudo mv "$ROOTFS"/tmp/opennsl-modules_*.deb "$BCM_PLATFORM_DIR/"
 sudo chown root:root "$BCM_PLATFORM_DIR"/*.deb
 
 if [[ "$INCLUDE_DOCKER" == "y" ]]; then

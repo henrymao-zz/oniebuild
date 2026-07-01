@@ -125,6 +125,14 @@ mount -t ext4 -o defaults,rw $demo_dev $demo_mnt || { echo "Error: Unable to mou
 
 cp demo.vmlinuz demo.initrd $demo_mnt/
 
+# Create /boot directory and copy System.map-* and config-* if present.
+mkdir -p $demo_mnt/boot
+for f in System.map-* config-*; do
+    if [ -f "$f" ]; then
+        cp "$f" "$demo_mnt/boot/"
+    fi
+done
+
 if [ -f fs.tar.gz ]; then
     echo "Extracting tar.gz rootfs..."
     tar -xzf fs.tar.gz -C "$demo_mnt/" || { echo "Error: Unable to extract tar.gz rootfs"; exit 1; }
