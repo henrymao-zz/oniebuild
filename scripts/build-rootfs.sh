@@ -115,6 +115,7 @@ sudo chroot "$ROOTFS" apt-get install -y --no-install-recommends \
     sudo \
     less \
     kmod \
+    lz4 \
     initramfs-tools \
     ca-certificates \
     curl \
@@ -193,6 +194,9 @@ sudo rm -rf "$ROOTFS/var/cache/apt/*.bin"
 # Generate locales so cloud-init's locale module doesn't fail on boot.
 sudo chroot "$ROOTFS" bash -c "sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/; s/^# *\(C.UTF-8 UTF-8\)/\1/' /etc/locale.gen 2>/dev/null; locale-gen"
 sudo chroot "$ROOTFS" bash -c "echo 'LANG=en_US.UTF-8' > /etc/default/locale"
+# Fix profile.d locale-fix to use en_US.UTF-8 instead of C.UTF-8 to avoid
+# locale warnings (C.UTF-8 is not recognized by locale-check).
+sudo sed -i 's/C\.UTF-8/en_US.UTF-8/' "$ROOTFS/etc/profile.d/01-locale-fix.sh" 2>/dev/null || true
 
 sudo chroot "$ROOTFS" bash -c "echo 'root:root' | chpasswd"
 sudo chroot "$ROOTFS" passwd -l root
