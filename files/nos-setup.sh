@@ -53,6 +53,12 @@ if [ "$ONIE_SWITCH_ASIC" = "bcm" ]; then
     else
         echo "nos-setup: WARNING, no opennsl .deb found in $BCM_DIR"
     fi
+    echo "nos-setup: installing libsaibcm from $BCM_DIR..."
+    if ls "$BCM_DIR"/libsaibcm_*.deb >/dev/null 2>&1; then
+        dpkg -i "$BCM_DIR"/libsaibcm_*.deb
+    else
+        echo "nos-setup: WARNING, no libsaibcm .deb found in $BCM_DIR"
+    fi
 else
     echo "nos-setup: onie_switch_asic is '${ONIE_SWITCH_ASIC:-unknown}', skipping opennsl"
 fi

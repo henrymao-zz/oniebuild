@@ -162,6 +162,12 @@ sudo chroot "$ROOTFS" bash -c "cd /tmp && apt-get download opennsl-modules"
 sudo mv "$ROOTFS"/tmp/opennsl-modules_*.deb "$BCM_PLATFORM_DIR/"
 sudo chown root:root "$BCM_PLATFORM_DIR"/*.deb
 
+# Download libsaibcm .deb and stage it under the bcm platform dir.
+echo "Downloading libsaibcm .deb..."
+LIBSAIBCM_URL="https://packages.trafficmanager.net/public/sai/sai-broadcom/SAI_11.2.0_GA-202405/11.2.30.5/xgs/libsaibcm_11.2.30.5_amd64.deb"
+sudo curl -fsSL -o "$BCM_PLATFORM_DIR/libsaibcm_11.2.30.5_amd64.deb" "$LIBSAIBCM_URL"
+sudo chown root:root "$BCM_PLATFORM_DIR"/*.deb
+
 if [[ "$INCLUDE_DOCKER" == "y" ]]; then
     echo "Installing Docker..."
     sudo chroot "$ROOTFS" bash -c '
