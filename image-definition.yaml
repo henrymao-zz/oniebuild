@@ -9,7 +9,7 @@ rootfs:
   components:
     - main
     - universe
-  mirror: http://archive.ubuntu.com/ubuntu
+  mirror: https://archive.ubuntu.com/ubuntu
   pocket: updates
   sources-list-deb822: true
   seed:
@@ -53,7 +53,7 @@ customization:
       mountpoint: /
       filesystem-type: ext4
       options: defaults
-      dump: true
+      dump: false
       fsck-order: 1
   cloud-init:
     meta-data: |
@@ -65,10 +65,15 @@ customization:
       disable_root: true
       users:
         - name: admin
-          passwd: "$6$4HoH24xSWdmzgnYH$iSnEWVVJYN.4oE3.FJg8DzOFJawcSGPAH5Qlr0u.UxYHhedKrQyg8UuhzIReU.6XSpYcDNlJtLXOEC2Uj3KnC0"
-          shell: /bin/sh
           lock_passwd: false
+          shell: /bin/bash
           sudo: "ALL=(ALL) NOPASSWD: ALL"
+      chpasswd:
+        expire: false
+        users:
+          - name: admin
+            password: admin
+            type: text
       runcmd:
         - /usr/sbin/firstboot.sh
   manual:

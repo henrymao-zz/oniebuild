@@ -687,58 +687,6 @@ do_test() {
     echo "  SSH:      ssh admin@localhost -p $SSH_FWD_PORT"
 }
 
-do_test_quick() {
-    echo "========================================="
-    echo " Quick Test Pipeline (reuse existing ONIE disk)"
-    echo "========================================="
-    echo "  Installer:     $(basename "${INSTALLER:-N/A}")"
-    echo "  Firmware:      $FIRMWARE"
-    echo "  Memory:        ${MEM}MB"
-    echo "  Target disk:   $DISK"
-    echo "========================================="
-
-    if [[ ! -f "$ONIE_BASE_DISK" ]]; then
-        echo "ERROR: ONIE base disk not found: $ONIE_BASE_DISK"
-        echo "Run 'make vm-test' first to create the ONIE base disk"
-        exit 1
-    fi
-
-    echo "Restoring clean ONIE disk from: $ONIE_BASE_DISK"
-    cp "$ONIE_BASE_DISK" "$DISK"
-
-    echo ""
-    echo "--- Phase 2: Install NOS via ONIE ---"
-    local installer_disk
-    installer_disk=$(prepare_installer_disk)
-
-    start_kvm "c" \
-        -drive "file=$installer_disk,if=virtio,index=1,format=raw"
-    wait_for_kvm
-    trigger_onie_install
-    kill_kvm
-    sleep 2
-
-    if [[ "$DISK" != "$OUTPUT_DISK" ]]; then
-        cp "$DISK" "$OUTPUT_DISK"
-    fi
-
-    echo ""
-    echo "--- Phase 3: Boot and verify NOS ---"
-    start_kvm "c"
-    wait_for_kvm
-    verify_boot
-    kill_kvm
-    sleep 2
-
-    echo ""
-    echo "========================================="
-    echo " Quick Test PASSED"
-    echo "========================================="
-    echo "  VM disk: $DISK"
-    echo "  Boot with: $(basename "$0") run"
-    echo "  SSH:      ssh admin@localhost -p $SSH_FWD_PORT"
-}
-
 parse_args "$@"
 check_deps
 

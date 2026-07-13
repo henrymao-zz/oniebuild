@@ -33,8 +33,6 @@ find / -ignore_readdir_race -name "*.pyc" -delete 2>/dev/null || true
 find / -ignore_readdir_race -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 find / -ignore_readdir_race -name "*.a" -not -path "*/lib/modules/*" -delete 2>/dev/null || true
 find / -ignore_readdir_race -name "*.la" -delete 2>/dev/null || true
-find /usr/share/locale -ignore_readdir_race -mindepth 1 -maxdepth 1 \
-    -not -name "en_US" -not -name "C" -not -iname "c.utf*" -exec rm -rf {} + 2>/dev/null || true
 find /usr/lib/locale -ignore_readdir_race -mindepth 1 -maxdepth 1 \
     -not -name "en_US" -not -name "C" -not -iname "c.utf*" -exec rm -rf {} + 2>/dev/null || true
 
@@ -76,7 +74,11 @@ fi
 # ---------------------------------------------------------------------------
 echo "Updating ldconfig and depmod..."
 ldconfig 2>/dev/null || true
-depmod -a 2>/dev/null || true
+for kdir in /lib/modules/*; do
+    [ -d "$kdir" ] || continue
+    kver=$(basename "$kdir")
+    depmod -a "$kver" 2>/dev/null || true
+done
 
 # Clean up
 rm -f /tmp/strip-rootfs.sh 2>/dev/null || true
