@@ -4,10 +4,7 @@
 
 set -e
 
-echo "nos-setup: running first-time initialization..."
-
-# Allow raw-packet capable ping (kept from previous first-boot setup).
-/usr/sbin/setcap cap_net_raw=ep /usr/bin/ping 2>/dev/null || true
+echo "firstboot: running first-time initialization..."
 
 # ---------------------------------------------------------------------------
 # Parse /etc/machine.conf (key=value) to obtain ONIE platform information.
@@ -37,8 +34,8 @@ fi
 
 ONIE_PLATFORM="${onie_platform:-}"
 ONIE_SWITCH_ASIC="${onie_switch_asic:-}"
-echo "nos-setup: onie_platform=${ONIE_PLATFORM:-unknown}"
-echo "nos-setup: onie_switch_asic=${ONIE_SWITCH_ASIC:-unknown}"
+echo "firstboot: onie_platform=${ONIE_PLATFORM:-unknown}"
+echo "firstboot: onie_switch_asic=${ONIE_SWITCH_ASIC:-unknown}"
 
 # ---------------------------------------------------------------------------
 # Install platform-specific packages from the local filesystem.
@@ -47,35 +44,35 @@ echo "nos-setup: onie_switch_asic=${ONIE_SWITCH_ASIC:-unknown}"
 # Install opennsl only on Broadcom (bcm) switch ASICs.
 if [ "$ONIE_SWITCH_ASIC" = "bcm" ]; then
     BCM_DIR="/usr/share/sonic/platform/bcm"
-    echo "nos-setup: installing opennsl from $BCM_DIR..."
+    echo "firstboot: installing opennsl from $BCM_DIR..."
     if ls "$BCM_DIR"/opennsl-modules_*.deb >/dev/null 2>&1; then
         dpkg -i "$BCM_DIR"/opennsl-modules_*.deb
     else
-        echo "nos-setup: WARNING, no opennsl .deb found in $BCM_DIR"
+        echo "firstboot: WARNING, no opennsl .deb found in $BCM_DIR"
     fi
-    echo "nos-setup: installing libsaibcm from $BCM_DIR..."
+    echo "firstboot: installing libsaibcm from $BCM_DIR..."
     if ls "$BCM_DIR"/libsaibcm_*.deb >/dev/null 2>&1; then
         dpkg -i "$BCM_DIR"/libsaibcm_*.deb
     else
-        echo "nos-setup: WARNING, no libsaibcm .deb found in $BCM_DIR"
+        echo "firstboot: WARNING, no libsaibcm .deb found in $BCM_DIR"
     fi
 else
-    echo "nos-setup: onie_switch_asic is '${ONIE_SWITCH_ASIC:-unknown}', skipping opennsl"
+    echo "firstboot: onie_switch_asic is '${ONIE_SWITCH_ASIC:-unknown}', skipping opennsl"
 fi
 
 # Install platform-modules for the detected platform.
 PLATFORM_DIR="/usr/share/sonic/platform/$ONIE_PLATFORM"
 case "$ONIE_PLATFORM" in
     x86_64-dellemc_s5232f_c3538-r0)
-        echo "nos-setup: installing platform-modules-s5232f from $PLATFORM_DIR..."
+        echo "firstboot: installing platform-modules-s5232f from $PLATFORM_DIR..."
         if ls "$PLATFORM_DIR"/platform-modules-s5232f_*.deb >/dev/null 2>&1; then
             dpkg -i "$PLATFORM_DIR"/platform-modules-s5232f_*.deb
         else
-            echo "nos-setup: WARNING, no platform-modules .deb found in $PLATFORM_DIR"
+            echo "firstboot: WARNING, no platform-modules .deb found in $PLATFORM_DIR"
         fi
         ;;
     *)
-        echo "nos-setup: no platform-modules package mapped for '${ONIE_PLATFORM:-unknown}'"
+        echo "firstboot: no platform-modules package mapped for '${ONIE_PLATFORM:-unknown}'"
         ;;
 esac
 
@@ -93,21 +90,21 @@ if [ -n "$ONIE_PLATFORM" ]; then
             mkdir -p "$(dirname "$HWSKU_DST")"
             rm -f "$HWSKU_DST"
             ln -s "$HWSKU_SRC" "$HWSKU_DST"
-            echo "nos-setup: linked $HWSKU_DST -> $HWSKU_SRC"
+            echo "firstboot: linked $HWSKU_DST -> $HWSKU_SRC"
         else
-            echo "nos-setup: WARNING, $HWSKU_SRC not present, skipping hwsku symlink"
+            echo "firstboot: WARNING, $HWSKU_SRC not present, skipping hwsku symlink"
         fi
     else
-        echo "nos-setup: WARNING, $DEFAULT_SKU_FILE not present, skipping hwsku symlink"
+        echo "firstboot: WARNING, $DEFAULT_SKU_FILE not present, skipping hwsku symlink"
     fi
 else
-    echo "nos-setup: WARNING, onie_platform is empty, skipping hwsku symlink"
+    echo "firstboot: WARNING, onie_platform is empty, skipping hwsku symlink"
 fi
 
 # Clean up apt cache to save space on the image.
 apt-get clean
 rm -rf /var/lib/apt/lists/* 2>/dev/null || true
 
-echo "nos-setup: first-time initialization complete"
+echo "firstboot: first-time initialization complete"
 
 exit 0

@@ -1,47 +1,34 @@
 include config.mk
 
--include oniecraft.conf
+STAMPDIR ?= $(BUILDDIR)/stamps
+UI_WORKDIR ?= $(BUILDDIR)/ui-workdir
+FILES_DIR ?= $(BUILDDIR)/debs
 
-.PHONY: all rootfs kernel packages image imagecraft vm-create vm-install vm-run vm-test vm-test-quick clean distclean help
+.PHONY: all rootfs image vm-create vm-install vm-run vm-test clean distclean help
 
 all: image
 
 help:
-	@echo "ONIECraft - Build ONIE-compatible installer images"
+	@echo "ONIEBuild - Build ONIE-compatible installer images"
 	@echo ""
 	@echo "Targets:"
 	@echo "  all       - Build the complete ONIE installer image (default)"
-	@echo "  rootfs    - Build the root filesystem"
-	@echo "  kernel    - Build or prepare the kernel"
-	@echo "  packages  - Install additional packages"
 	@echo "  image     - Package into ONIE installer image"
-	@echo "  imagecraft - Build ONIE installer image using imagecraft"
 	@echo "  clean     - Remove build artifacts (keep downloads)"
 	@echo "  distclean - Remove everything including downloads"
 	@echo ""
-	@echo "Configuration (set in oniecraft.conf or environment):"
-	@echo "  ARCH              - Target architecture (x86_64, arm64) [$(ARCH)]"
+	@echo " — override via environment variables):"
 	@echo "  NOS_NAME          - Network OS name [$(NOS_NAME)]"
 	@echo "  NOS_VERSION       - Network OS version [$(NOS_VERSION)]"
-	@echo "  UBUNTU_SUITE      - Ubuntu suite/codename [$(UBUNTU_SUITE)]"
 	@echo "  BOOTLOADER        - Bootloader type: grub or uboot [$(BOOTLOADER)]"
 	@echo "  PART_SIZE_MB      - Install partition size in MB [$(PART_SIZE_MB)]"
-	@echo "  INCLUDE_DOCKER    - Include Docker engine (y/n) [$(INCLUDE_DOCKER)]"
-	@echo "  KERNEL_SRC        - Path to custom kernel source tree [$(KERNEL_SRC)]"
-	@echo "  KERNEL_CONFIG     - Path to kernel .config file [$(KERNEL_CONFIG)]"
-	@echo "  KERNEL_VERSION    - Kernel version string [$(KERNEL_VERSION)]"
-	@echo "  KERNEL_PKG        - Kernel package name (e.g. linux-sonic) [$(KERNEL_PKG)]"
-	@echo "  KERNEL_PPA        - PPA for custom kernel (e.g. ppa:canonical-kernel-team/bootstrap) [$(KERNEL_PPA)]"
-	@echo "  INCLUDE_DEBS      - Space-separated list of .deb files to install [$(INCLUDE_DEBS)]"
-	@echo "  INCLUDE_SOURCE_PKGS - Space-separated source pkg dirs to build and install [$(INCLUDE_SOURCE_PKGS)]"
 	@echo "  V                 - Verbose output (1=on, 0=off) [$(V)]"
 	@echo ""
 	@echo "VM Testing Targets (require ONIE recovery ISO):"
 	@echo "  vm-create   - Create KVM VM with ONIE installed from recovery ISO"
-	@echo "  vm-install  - Install ONIECraft image onto existing ONIE VM"
+	@echo "  vm-install  - Install ONIEBuild image onto existing ONIE VM"
 	@echo "  vm-run      - Boot the installed NOS image in the VM"
 	@echo "  vm-test     - Full pipeline: create -> install NOS -> verify boot"
-	@echo "  vm-test-quick - Quick pipeline: install NOS -> verify boot (reuses ONIE disk)"
 	@echo ""
 	@echo "VM Configuration:"
 	@echo "  ONIE_ISO    - Path to ONIE recovery ISO (KVM x86_64) [$(ONIE_ISO)]"
@@ -51,58 +38,41 @@ help:
 	@echo "  VM_KVM_PORT - KVM serial console telnet port [$(VM_KVM_PORT)]"
 	@echo "  VM_SSH_PORT - Host SSH forwarding port [$(VM_SSH_PORT)]"
 
-rootfs: $(STAMPDIR)/rootfs
-
-kernel: $(STAMPDIR)/kernel
-
-packages: $(STAMPDIR)/packages
+rootfs: $(STAMPDIR)/ubuntu-image
 
 image: $(STAMPDIR)/image
 
-$(STAMPDIR)/rootfs: | $(STAMPDIR) $(BUILDDIR)
-	$(Q)echo "==== Building root filesystem ===="
-	$(Q)sudo scripts/build-rootfs.sh \
-		--arch "$(ARCH)" \
-		--suite "$(UBUNTU_SUITE)" \
-		--mirror "$(UBUNTU_MIRROR)" \
-		--components "$(UBUNTU_COMPONENTS)" \
-		--rootfs "$(ROOTFS_DIR)" \
-		--overlay "$(OVERLAY_DIR)" \
-		--nos-name "$(NOS_NAME)" \
-		--nos-version "$(NOS_VERSION)" \
-		--include-docker "$(INCLUDE_DOCKER)"
+# Download all .deb packages for staging into rootfs via image-definition copy-file
+$(STAMPDIR)/download-debs: | $(STAMPDIR) $(FILES_DIR)
+	$(Q)echo "==== Downloading deb packages ===="
+	$(Q)echo "  Downloading libsaibcm..."
+	$(Q)curl --retry 5 --retry-delay 3 --retry-all-errors -fSL -o "$(FILES_DIR)/libsaibcm.deb" "$(LIBSAIBCM_URL)"
+	$(Q)curl -sL "https://ppa.launchpadcontent.net/$(PPA_NAME)/ubuntu/dists/$(SERIES)/main/binary-amd64/Packages.gz" | gunzip > $(FILES_DIR)/Packages
+	$(Q)for pkg in platform-modules-s5232f opennsl-modules; do \
+		relpath=$$(awk -v p="$$pkg" '$$1=="Package:" && $$2==p {f=1} f && $$1=="Filename:" {print $$2; exit}' $(FILES_DIR)/Packages); \
+		echo "  Downloading $$pkg..."; \
+		curl --retry 5 --retry-delay 3 --retry-all-errors -fSL -o "$(FILES_DIR)/$$pkg.deb" "$(PPA_URL)/$$relpath"; \
+	done
+	$(Q)rm -f $(FILES_DIR)/Packages
 	$(Q)touch $@
 
-$(STAMPDIR)/kernel: | $(STAMPDIR) $(BUILDDIR)
-	$(Q)echo "==== Building kernel ===="
-	$(Q)sudo scripts/build-kernel.sh \
-		--arch "$(ARCH)" \
-		--kernel-src "$(KERNEL_SRC)" \
-		--kernel-config "$(KERNEL_CONFIG)" \
-		--kernel-version "$(KERNEL_VERSION)" \
-		--kernel-pkg "$(KERNEL_PKG)" \
-		--kernel-ppa "$(KERNEL_PPA)" \
-		--builddir "$(KERNEL_DIR)" \
-		--rootfs "$(ROOTFS_DIR)"
+# Step 1: Run ubuntu-image classic to build the complete rootfs tarball
+$(STAMPDIR)/ubuntu-image: image-definition.yaml $(STAMPDIR)/download-debs | $(STAMPDIR) $(BUILDDIR)
+	$(Q)echo "==== Building rootfs via ubuntu-image ===="
+	$(Q)sudo ubuntu-image classic \
+		-w "$(UI_WORKDIR)" \
+		-O "$(BUILDDIR)" \
+		$(UI_DEBUG) \
+		image-definition.yaml
 	$(Q)touch $@
 
-$(STAMPDIR)/packages: $(STAMPDIR)/rootfs | $(STAMPDIR) $(BUILDDIR)
-	$(Q)echo "==== Installing packages ===="
-	$(Q)sudo scripts/build-packages.sh \
-		--rootfs "$(ROOTFS_DIR)" \
-		--debs-dir "$(PACKAGES_DEB_DIR)" \
-		--source-dir "$(PACKAGES_SRC_DIR)" \
-		--include-debs "$(INCLUDE_DEBS)" \
-		--include-source "$(INCLUDE_SOURCE_PKGS)"
-	$(Q)touch $@
-
-$(STAMPDIR)/image: $(STAMPDIR)/rootfs $(STAMPDIR)/kernel $(STAMPDIR)/packages | $(STAMPDIR) $(BUILDDIR)
+# Step 2: Package into ONIE installer image
+$(STAMPDIR)/image: $(STAMPDIR)/ubuntu-image | $(STAMPDIR) $(BUILDDIR)
 	$(Q)echo "==== Creating ONIE installer image ===="
-	$(Q)sudo scripts/mk-installer.sh \
+	$(Q)sudo ./build-onie.sh \
 		--arch "$(ARCH)" \
 		--bootloader "$(BOOTLOADER)" \
-		--rootfs "$(ROOTFS_DIR)" \
-		--kernel-dir "$(KERNEL_DIR)" \
+		--rootfs-tarball "$(BUILDDIR)/$(ROOTFS_TARBALL_NAME)" \
 		--nos-name "$(NOS_NAME)" \
 		--nos-version "$(NOS_VERSION)" \
 		--git-branch "$(GIT_BRANCH)" \
@@ -117,17 +87,20 @@ $(STAMPDIR):
 $(BUILDDIR):
 	$(Q)mkdir -p $@
 
+$(FILES_DIR):
+	$(Q)mkdir -p $@
+
 clean:
 	$(Q)echo "==== Cleaning build artifacts ===="
-	$(Q)sudo rm -rf $(ROOTFS_DIR) $(KERNEL_DIR) $(STAMPDIR)
+	$(Q)sudo rm -rf $(STAMPDIR) $(UI_WORKDIR) $(FILES_DIR)
 	$(Q)sudo rm -f $(BUILDDIR)/$(IMAGE_NAME) $(BUILDDIR)/*.squashfs $(BUILDDIR)/*.zip
-
+	$(Q)sudo rm -f $(BUILDDIR)/$(ROOTFS_TARBALL_NAME)
 distclean: clean
 	$(Q)echo "==== Removing all build data ===="
 	$(Q)sudo rm -rf $(BUILDDIR)
 
 vm-create:
-	$(Q)scripts/build-vm.sh create \
+	$(Q)./test-vm.sh create \
 		--onie-iso "$(ONIE_ISO)" \
 		--onie-iso-url "$(ONIE_ISO_URL)" \
 		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
@@ -138,7 +111,7 @@ vm-create:
 		--ssh-port "$(VM_SSH_PORT)"
 
 vm-install:
-	$(Q)scripts/build-vm.sh install \
+	$(Q)./test-vm.sh install \
 		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
 		--installer "$(BUILDDIR)/$(IMAGE_NAME)" \
 		--firmware "$(VM_FIRMWARE)" \
@@ -146,7 +119,7 @@ vm-install:
 		--ssh-port "$(VM_SSH_PORT)"
 
 vm-run:
-	$(Q)scripts/build-vm.sh run \
+	$(Q)./test-vm.sh run \
 		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
 		--firmware "$(VM_FIRMWARE)" \
 		--mem "$(VM_MEM)" \
@@ -154,7 +127,7 @@ vm-run:
 		--ssh-port "$(VM_SSH_PORT)"
 
 vm-test:
-	$(Q)scripts/build-vm.sh test \
+	$(Q)./test-vm.sh test \
 		--onie-iso "$(ONIE_ISO)" \
 		--onie-iso-url "$(ONIE_ISO_URL)" \
 		--installer "$(BUILDDIR)/$(IMAGE_NAME)" \
@@ -164,23 +137,3 @@ vm-test:
 		--firmware "$(VM_FIRMWARE)" \
 		--kvm-port "$(VM_KVM_PORT)" \
 		--ssh-port "$(VM_SSH_PORT)"
-
-vm-test-quick:
-	$(Q)scripts/build-vm.sh test-quick \
-		--installer "$(BUILDDIR)/$(IMAGE_NAME)" \
-		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
-		--mem "$(VM_MEM)" \
-		--firmware "$(VM_FIRMWARE)" \
-		--kvm-port "$(VM_KVM_PORT)" \
-		--ssh-port "$(VM_SSH_PORT)"
-
-imagecraft:
-	$(Q)echo "==== Building ONIE installer image with imagecraft ===="
-	$(Q)scripts/build-with-imagecraft.sh \
-		--arch "$(ARCH)" \
-		--bootloader "$(BOOTLOADER)" \
-		--nos-name "$(NOS_NAME)" \
-		--nos-version "$(NOS_VERSION)" \
-		--part-size "$(PART_SIZE_MB)" \
-		--kernel-dir "$(KERNEL_DIR)" \
-		--output "$(BUILDDIR)/$(IMAGE_NAME)"

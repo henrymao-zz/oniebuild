@@ -1,0 +1,90 @@
+name: ubuntu-nos
+display-name: Ubuntu NOS
+architecture: amd64
+series: resolute
+class: preinstalled
+kernel: linux-sonic
+
+rootfs:
+  components:
+    - main
+    - universe
+  mirror: http://archive.ubuntu.com/ubuntu
+  pocket: updates
+  sources-list-deb822: true
+  seed:
+    urls:
+      - "https://git.launchpad.net/~ubuntu-core-dev/ubuntu-seeds/+git/"
+    branch: resolute
+    names:
+      - server-minimal
+
+customization:
+  extra-ppas:
+    - name: canonical-kernel-team/bootstrap
+      fingerprint: D8027DCFBDAF61FB44D5FDCE9B5F34077FA4288A
+      keep-enabled: false
+    - name: henrymao/ubuntu-nos
+      fingerprint: E0B27E6A9E5DA9C82A1DC5D2C49083EAE9F9EF10
+      keep-enabled: true
+  extra-packages:
+    - name: libpam-systemd
+    - name: iproute2
+    - name: iputils-ping
+    - name: openssh-server
+    - name: less
+    - name: lz4
+    - name: curl
+    - name: gpg
+    - name: locales
+    - name: logrotate
+    - name: net-tools
+    - name: netplan.io
+    - name: fancontrol
+    - name: vim
+    - name: bird3
+    - name: socat
+    - name: sswsyncd
+    - name: device-data
+  extra-snaps:
+    - name: snapd
+  cloud-init:
+    meta-data: |
+      instance-id: ubuntu
+      local-hostname: ubuntu
+    user-data: |
+      #cloud-config
+      locale: C.UTF-8
+      disable_root: true
+      users:
+        - name: admin
+          passwd: "$6$4HoH24xSWdmzgnYH$iSnEWVVJYN.4oE3.FJg8DzOFJawcSGPAH5Qlr0u.UxYHhedKrQyg8UuhzIReU.6XSpYcDNlJtLXOEC2Uj3KnC0"
+          shell: /bin/sh
+          lock_passwd: false
+          sudo: "ALL=(ALL) NOPASSWD: ALL"
+      runcmd:
+        - /usr/sbin/firstboot.sh
+  manual:
+    make-dirs:
+      - path: /usr/share/sonic/platform/bcm
+        permissions: 0755
+      - path: /usr/share/sonic/platform/x86_64-dellemc_s5232f_c3538-r0
+        permissions: 0755
+    copy-file:
+      - source: files/firstboot.sh
+        destination: /usr/sbin/firstboot.sh
+      - source: scripts/strip-rootfs.sh
+        destination: /tmp/strip-rootfs.sh
+      - source: build/debs/libsaibcm.deb
+        destination: /usr/share/sonic/platform/bcm/libsaibcm.deb
+      - source: build/debs/opennsl-modules.deb
+        destination: /usr/share/sonic/platform/bcm/opennsl-modules.deb
+      - source: build/debs/platform-modules-s5232f.deb
+        destination: /usr/share/sonic/platform/x86_64-dellemc_s5232f_c3538-r0/platform-modules-s5232f.deb
+    execute:
+      - path: /tmp/strip-rootfs.sh
+
+artifacts:
+  rootfs-tarball:
+    name: ubuntu-nos-rootfs.tar.gz
+    compression: gzip

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$SCRIPT_DIR"
 
 MEM="${VM_MEM:-2048}"
 DISK_SIZE="${VM_DISK_SIZE:-40}"
@@ -10,7 +10,7 @@ KVM_PORT="${VM_KVM_PORT:-9000}"
 VNC_PORT="${VM_VNC_PORT:-0}"
 SSH_FWD_PORT="${VM_SSH_PORT:-3041}"
 FIRMWARE="${VM_FIRMWARE:-bios}"
-ONIE_ISO_URL="${ONIE_ISO_URL:-https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64-r0.iso}"
+ONIE_ISO_URL="${ONIE_ISO_URL:-}"
 DISK=""
 ONIE_ISO=""
 INSTALLER=""
@@ -22,20 +22,19 @@ ONIE_BASE_DISK=""
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0) [command] [options]
+Usage: $(basename "$0") [command] [options]
 
 Commands:
   create     Create a KVM VM disk with ONIE installed (from recovery ISO)
-  install    Install ONIECraft image onto an existing ONIE VM
+  install    Install ONIE image onto an existing ONIE VM
   run        Boot the installed NOS image
   test       Full pipeline: create VM -> install ONIE -> install NOS -> verify boot
-  test-quick Quick pipeline: install NOS -> verify boot (reuses existing ONIE disk)
 
 Options:
   --disk PATH          VM disk image path (default: build/vm/onie-disk.qcow2)
   --onie-iso PATH      ONIE recovery ISO for KVM (auto-downloaded if not set)
   --onie-iso-url URL   URL to download ONIE recovery ISO (default: $ONIE_ISO_URL)
-  --installer PATH     ONIECraft installer .bin file (required for install/test)
+  --installer PATH     ONIE installer .bin file (required for install/test)
   --output PATH        Output disk path after install (default: build/vm/nos-disk.qcow2)
   --firmware MODE      BIOS mode: bios or uefi (default: $FIRMWARE)
   --mem MB             VM memory in MB (default: $MEM)
@@ -46,12 +45,12 @@ Options:
   --timeout-boot S     Boot timeout in seconds (default: $TIMEOUT_BOOT)
 
 Examples:
-  # Build ONIECraft image first, then test in a VM:
+  # Build ONIE image first, then test in a VM:
   $(basename "$0") test --onie-iso /path/to/onie-recovery-x86_64-kvm_x86_64-r0.iso
 
   # Step by step:
   $(basename "$0") create --onie-iso /path/to/onie-recovery-x86_64-kvm_x86_64-r0.iso
-  $(basename "$0") install --installer build/ONIECraft-1.0.0-x86_64-installer.bin
+  $(basename "$0") install --installer build/ONIE-1.0.0-x86_64-installer.bin
   $(basename "$0") run
 
   # UEFI boot:
@@ -65,7 +64,7 @@ parse_args() {
     shift || true
 
     case "$cmd" in
-        create|install|run|test|test-quick) ONIE_MODE="$cmd" ;;
+        create|install|run|test) ONIE_MODE="$cmd" ;;
         -h|--help) usage 0 ;;
         "") usage 1 ;;
         *) echo "ERROR: Unknown command: $cmd"; usage 1 ;;
@@ -238,8 +237,8 @@ start_kvm() {
         "${disk_arg[@]}" \
         "${extra_args[@]}" \
         -device e1000,netdev=onienet \
-        -netdev "user,id=onienet,hostfwd=tcp:0.0.0.0:${SSH_FWD_PORT}-:22" \
-        -vnc "0.0.0.0:$VNC_PORT" \
+        -netdev "user,id=onienet,hostfwd=tcp:127.0.0.1:${SSH_FWD_PORT}-:22" \
+        -vnc "127.0.0.1:$VNC_PORT" \
         -vga std \
         -serial "telnet:127.0.0.1:$KVM_PORT,server" \
         -monitor none \
@@ -748,5 +747,4 @@ case "$ONIE_MODE" in
     install) do_install ;;
     run) do_run ;;
     test) do_test ;;
-    test-quick) do_test_quick ;;
 esac

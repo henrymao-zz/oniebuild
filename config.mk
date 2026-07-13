@@ -1,50 +1,37 @@
-ONIECRAFT_VERSION ?= 1.0.0
 NOS_NAME ?= Ubuntu
 NOS_VERSION ?= 1.0.0
-
 ARCH ?= x86_64
-UBUNTU_SUITE ?= resolute
-UBUNTU_MIRROR ?= http://archive.ubuntu.com/ubuntu
-UBUNTU_COMPONENTS ?= main,universe
+ROOTFS_TARBALL_NAME ?= ubuntu-nos-rootfs.tar.gz
 
+# Values not in image-definition.yaml — set in config.mk
 BOOTLOADER ?= grub
 PART_SIZE_MB ?= 4096
-
-INCLUDE_DOCKER ?= n
-
-KERNEL_SRC ?=
-KERNEL_CONFIG ?=
-KERNEL_VERSION ?=
-KERNEL_PKG ?= linux-sonic
-KERNEL_PPA ?= ppa:canonical-kernel-team/bootstrap
 
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
 GIT_REV ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
-INCLUDE_DEBS ?=
-INCLUDE_SOURCE_PKGS ?=
-
 ONIE_ISO_URL ?= https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64-r0.iso
 ONIE_ISO ?= $(BUILDDIR)/vm/onie-recovery-x86_64-kvm_x86_64-r0.iso
-VM_MEM ?= 2048
+VM_MEM ?= 4096
 VM_DISK_SIZE ?= 40
 VM_FIRMWARE ?= bios
 VM_KVM_PORT ?= 9000
 VM_SSH_PORT ?= 3041
 
 BUILDDIR ?= build
-STAMPDIR ?= $(BUILDDIR)/stamps
-ROOTFS_DIR ?= $(BUILDDIR)/rootfs
-KERNEL_DIR ?= $(BUILDDIR)/kernel
-OVERLAY_DIR ?= overlay
-PACKAGES_DEB_DIR ?= packages/debs
-PACKAGES_SRC_DIR ?= packages/source
+
+SERIES ?= resolute
+PPA_NAME ?= henrymao/ubuntu-nos
+PPA_URL ?= https://ppa.launchpadcontent.net/$(PPA_NAME)/ubuntu
+LIBSAIBCM_URL ?= https://packages.trafficmanager.net/public/sai/sai-broadcom/SAI_11.2.0_GA-202405/11.2.30.5/xgs/libsaibcm_11.2.30.5_amd64.deb
 
 IMAGE_NAME ?= $(NOS_NAME)-$(NOS_VERSION)-$(ARCH)-installer.bin
 
 V ?= 0
 ifeq ($(V),0)
 Q := @
+UI_DEBUG :=
 else
 Q :=
+UI_DEBUG := --debug
 endif

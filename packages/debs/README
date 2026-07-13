@@ -1,6 +1,0 @@
-# Debian Packages
-#
-# Place .deb files in this directory to have them automatically
-# installed into the rootfs during the packages build step.
-#
-# Dependencies will be resolved using apt-get install -f.
