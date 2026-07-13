@@ -48,6 +48,13 @@ customization:
     - name: device-data
   extra-snaps:
     - name: snapd
+  fstab:
+    - label: UBUNTU-NOS
+      mountpoint: /
+      filesystem-type: ext4
+      options: defaults
+      dump: true
+      fsck-order: 1
   cloud-init:
     meta-data: |
       instance-id: ubuntu
