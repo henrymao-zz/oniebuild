@@ -45,14 +45,14 @@ echo "firstboot: onie_switch_asic=${ONIE_SWITCH_ASIC:-unknown}"
 if [ "$ONIE_SWITCH_ASIC" = "bcm" ]; then
     BCM_DIR="/usr/share/sonic/platform/bcm"
     echo "firstboot: installing opennsl from $BCM_DIR..."
-    if ls "$BCM_DIR"/opennsl-modules_*.deb >/dev/null 2>&1; then
-        dpkg -i "$BCM_DIR"/opennsl-modules_*.deb
+    if ls "$BCM_DIR"/opennsl-modules*.deb >/dev/null 2>&1; then
+        dpkg -i "$BCM_DIR"/opennsl-modules*.deb
     else
         echo "firstboot: WARNING, no opennsl .deb found in $BCM_DIR"
     fi
     echo "firstboot: installing libsaibcm from $BCM_DIR..."
-    if ls "$BCM_DIR"/libsaibcm_*.deb >/dev/null 2>&1; then
-        dpkg -i "$BCM_DIR"/libsaibcm_*.deb
+    if ls "$BCM_DIR"/libsaibcm*.deb >/dev/null 2>&1; then
+        dpkg -i "$BCM_DIR"/libsaibcm*.deb
     else
         echo "firstboot: WARNING, no libsaibcm .deb found in $BCM_DIR"
     fi
@@ -65,8 +65,8 @@ PLATFORM_DIR="/usr/share/sonic/platform/$ONIE_PLATFORM"
 case "$ONIE_PLATFORM" in
     x86_64-dellemc_s5232f_c3538-r0)
         echo "firstboot: installing platform-modules-s5232f from $PLATFORM_DIR..."
-        if ls "$PLATFORM_DIR"/platform-modules-s5232f_*.deb >/dev/null 2>&1; then
-            dpkg -i "$PLATFORM_DIR"/platform-modules-s5232f_*.deb
+        if ls "$PLATFORM_DIR"/platform-modules-s5232f*.deb >/dev/null 2>&1; then
+            dpkg -i "$PLATFORM_DIR"/platform-modules-s5232f*.deb
         else
             echo "firstboot: WARNING, no platform-modules .deb found in $PLATFORM_DIR"
         fi
