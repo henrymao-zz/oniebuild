@@ -240,7 +240,7 @@ menuentry '${nos_menuentry}' --unrestricted {
         insmod gzio
         insmod part_msdos
         insmod ext2
-        linux   /boot/vmlinuz root=LABEL=$volume_label rw $GRUB_CMDLINE_LINUX \$ONIE_EXTRA_CMDLINE_LINUX onie_TYPE=$onie_type
+        linux   /boot/vmlinuz root=LABEL=$volume_label rw $GRUB_CMDLINE_LINUX \$ONIE_EXTRA_CMDLINE_LINUX
         echo    'Loading ${nos_menuentry} initial ramdisk ...'
         initrd  /boot/initrd.img
 }

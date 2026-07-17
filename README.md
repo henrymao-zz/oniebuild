@@ -6,7 +6,7 @@ Generate ONIE-compatible self-extracting installer images for network switches. 
 
 - **Base OS**: Ubuntu 26.04 (Resolute)
 - **Kernel**: `linux-sonic 7.0.0-1002.2` from `ppa:canonical-kernel-team/bootstrap`
-- **Bootloader**: GRUB (BIOS + UEFI for x86_64)
+- **Bootloader**: GRUB (BIOS; installer also supports UEFI on target hardware)
 - **Architectures**: x86_64 (amd64)
 - **Output**: Self-extracting shell archive (`.bin`) with SHA1 verification
 - **Rootfs builder**: `ubuntu-image classic` (Canonical's official image builder)
@@ -54,7 +54,6 @@ make vm-run       # Boot installed NOS interactively
 ```
 oniebuild/
   Makefile                    # Top-level build orchestration
-  config.mk                   # Default configuration
   image-definition.yaml       # ubuntu-image classic input (seed, packages, cloud-init)
   build-onie.sh               # ONIE installer image packaging
   test-vm.sh                  # KVM VM testing

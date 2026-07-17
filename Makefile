@@ -93,7 +93,7 @@ build/debs:
 
 clean:
 	$(Q)echo "==== Cleaning build artifacts ===="
-	$(Q)sudo rm -rf build/stamps $(UI_WORKDIR) build/debs
+	$(Q)sudo rm -rf build/stamps build/.ubuntu-image build/debs
 	$(Q)sudo rm -f build/$(IMAGE_NAME) build/*.squashfs build/*.zip
 	$(Q)sudo rm -f build/ubuntu-nos-rootfs.tar.gz
 

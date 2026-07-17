@@ -40,6 +40,7 @@ customization:
     - name: logrotate
     - name: net-tools
     - name: netplan.io
+    - name: lm-sensors
     - name: fancontrol
     - name: vim
     - name: bird3
