@@ -31,7 +31,7 @@ sudo snap install ubuntu-image --classic
 ### VM Testing
 
 ```bash
-sudo apt install -y qemu-system-x86 qemu-utils expect ovmf
+sudo apt install -y qemu-system-x86 qemu-utils expect
 ```
 
 ## Quick Start

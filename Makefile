@@ -2,7 +2,6 @@
 NOS_NAME ?= Ubuntu
 NOS_VERSION ?= 1.0.0
 ARCH ?= x86_64
-BOOTLOADER ?= grub
 PART_SIZE_MB ?= 4096
 
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
@@ -20,7 +19,6 @@ ONIE_ISO_URL ?= https://packages.trafficmanager.net/public/onie/onie-recovery-x8
 ONIE_ISO ?= build/vm/onie-recovery-x86_64-kvm_x86_64-r0.iso
 VM_MEM ?= 2048
 VM_DISK_SIZE ?= 40
-VM_FIRMWARE ?= bios
 VM_KVM_PORT ?= 9000
 VM_SSH_PORT ?= 3041
 
@@ -73,9 +71,8 @@ build/stamps/ubuntu-image: image-definition.yaml build/stamps/download-debs | bu
 # Step 2: Package into ONIE installer image
 build/stamps/image: build/stamps/ubuntu-image | build/stamps build
 	$(Q)echo "==== Creating ONIE installer image ===="
-	$(Q)sudo ./build-onie.sh \
+	$(Q)./build-onie.sh \
 		--arch "$(ARCH)" \
-		--bootloader "$(BOOTLOADER)" \
 		--rootfs-tarball build/ubuntu-nos-rootfs.tar.gz \
 		--nos-name "$(NOS_NAME)" \
 		--nos-version "$(NOS_VERSION)" \
@@ -111,7 +108,6 @@ vm-create:
 		--disk "build/vm/onie-disk.qcow2" \
 		--mem "$(VM_MEM)" \
 		--disk-size "$(VM_DISK_SIZE)" \
-		--firmware "$(VM_FIRMWARE)" \
 		--kvm-port "$(VM_KVM_PORT)" \
 		--ssh-port "$(VM_SSH_PORT)"
 
@@ -119,14 +115,12 @@ vm-install:
 	$(Q)./test-vm.sh install \
 		--disk "build/vm/onie-disk.qcow2" \
 		--installer "build/$(IMAGE_NAME)" \
-		--firmware "$(VM_FIRMWARE)" \
 		--kvm-port "$(VM_KVM_PORT)" \
 		--ssh-port "$(VM_SSH_PORT)"
 
 vm-run:
 	$(Q)./test-vm.sh run \
 		--disk "build/vm/onie-disk.qcow2" \
-		--firmware "$(VM_FIRMWARE)" \
 		--mem "$(VM_MEM)" \
 		--kvm-port "$(VM_KVM_PORT)" \
 		--ssh-port "$(VM_SSH_PORT)"
@@ -139,6 +133,5 @@ vm-test:
 		--disk "build/vm/onie-disk.qcow2" \
 		--mem "$(VM_MEM)" \
 		--disk-size "$(VM_DISK_SIZE)" \
-		--firmware "$(VM_FIRMWARE)" \
 		--kvm-port "$(VM_KVM_PORT)" \
 		--ssh-port "$(VM_SSH_PORT)"

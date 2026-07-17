@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ARCH=""
-BOOTLOADER=""
 ROOTFS_TARBALL=""
 NOS_NAME=""
 NOS_VERSION=""
@@ -14,7 +13,6 @@ OUTPUT=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --arch) ARCH="$2"; shift 2 ;;
-        --bootloader) BOOTLOADER="$2"; shift 2 ;;
         --rootfs-tarball) ROOTFS_TARBALL="$2"; shift 2 ;;
         --nos-name) NOS_NAME="$2"; shift 2 ;;
         --nos-version) NOS_VERSION="$2"; shift 2 ;;
@@ -27,7 +25,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 : "${ARCH:=x86_64}"
-: "${BOOTLOADER:=grub}"
 : "${NOS_NAME:=Ubuntu-NOS}"
 : "${NOS_VERSION:=1.0.0}"
 : "${GIT_BRANCH:=unknown}"
@@ -38,9 +35,6 @@ done
 if [[ -z "${OUTPUT:-}" ]]; then
     OUTPUT="build/${NOS_NAME}-${NOS_VERSION}-${ARCH}-installer.bin"
 fi
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-INSTALLER_DIR="$SCRIPT_DIR/installer"
 
 ROOTFS_TARBALL="$(readlink -f "$ROOTFS_TARBALL")"
 
@@ -60,7 +54,6 @@ fi
 echo "Packaging ONIE installer image..."
 echo "  Kernel version: $KVER"
 echo "  Architecture:   $ARCH"
-echo "  Bootloader:     $BOOTLOADER"
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf $TMP_DIR' EXIT
@@ -71,15 +64,7 @@ mkdir -p "$INSTALLER_TMP"
 echo "Using rootfs tarball directly as fs.tar.gz..."
 cp "$ROOTFS_TARBALL" "$INSTALLER_TMP/fs.tar.gz"
 
-if [[ "$BOOTLOADER" == "grub" ]]; then
-    INSTALL_ARCH_DIR="$INSTALLER_DIR/grub-arch"
-else
-    INSTALL_ARCH_DIR="$INSTALLER_DIR/u-boot-arch"
-fi
-
-if [[ -d "$INSTALL_ARCH_DIR" ]]; then
-    cp -r "$INSTALL_ARCH_DIR/"* "$INSTALLER_TMP/"
-fi
+cp -r onie/grub-arch/* "$INSTALLER_TMP/"
 
 cat > "$INSTALLER_TMP/machine.conf" <<EOF
 machine=$NOS_NAME
@@ -102,22 +87,16 @@ tar -C "$TMP_DIR" -cf "$SHARCH" installer || {
 
 SHA1=$(sha1sum "$SHARCH" | awk '{print $1}')
 
-SHARCH_BODY="$INSTALLER_DIR/sharch_body.sh"
+SHARCH_BODY="onie/sharch_body.sh"
 if [[ ! -f "$SHARCH_BODY" ]]; then
     echo "ERROR: sharch_body.sh template not found: $SHARCH_BODY"
     exit 1
 fi
 
-OUTPUT_DIR="$(dirname "$OUTPUT")"
-mkdir -p "$OUTPUT_DIR"
-
 cp "$SHARCH_BODY" "$OUTPUT"
 sed -i -e "s/%%IMAGE_SHA1%%/$SHA1/" "$OUTPUT"
 cat "$SHARCH" >> "$OUTPUT"
 chmod +x "$OUTPUT"
-if [[ -n "${SUDO_USER:-}" ]]; then
-    chown "$SUDO_USER:$SUDO_USER" "$OUTPUT" 2>/dev/null || true
-fi
 
 echo ""
 echo "Success: ONIE installer image created:"

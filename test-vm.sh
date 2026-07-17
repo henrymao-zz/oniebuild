@@ -9,7 +9,6 @@ DISK_SIZE="${VM_DISK_SIZE:-40}"
 KVM_PORT="${VM_KVM_PORT:-9000}"
 VNC_PORT="${VM_VNC_PORT:-0}"
 SSH_FWD_PORT="${VM_SSH_PORT:-3041}"
-FIRMWARE="${VM_FIRMWARE:-bios}"
 ONIE_ISO_URL="${ONIE_ISO_URL:-}"
 DISK=""
 ONIE_ISO=""
@@ -36,7 +35,6 @@ Options:
   --onie-iso-url URL   URL to download ONIE recovery ISO (default: $ONIE_ISO_URL)
   --installer PATH     ONIE installer .bin file (required for install/test)
   --output PATH        Output disk path after install (default: build/vm/nos-disk.qcow2)
-  --firmware MODE      BIOS mode: bios or uefi (default: $FIRMWARE)
   --mem MB             VM memory in MB (default: $MEM)
   --disk-size GB       VM disk size in GB (default: $DISK_SIZE)
   --kvm-port PORT     Telnet port for serial console (default: $KVM_PORT)
@@ -52,9 +50,6 @@ Examples:
   $(basename "$0") create --onie-iso /path/to/onie-recovery-x86_64-kvm_x86_64-r0.iso
   $(basename "$0") install --installer build/ONIE-1.0.0-x86_64-installer.bin
   $(basename "$0") run
-
-  # UEFI boot:
-  $(basename "$0") test --onie-iso /path/to/onie-recovery.iso --firmware uefi
 EOF
     exit "${1:-0}"
 }
@@ -77,7 +72,6 @@ parse_args() {
             --onie-iso-url) ONIE_ISO_URL="$2"; shift 2 ;;
             --installer) INSTALLER="$2"; shift 2 ;;
             --output) OUTPUT_DISK="$2"; shift 2 ;;
-            --firmware) FIRMWARE="$2"; shift 2 ;;
             --mem) MEM="$2"; shift 2 ;;
             --disk-size) DISK_SIZE="$2"; shift 2 ;;
             --kvm-port) KVM_PORT="$2"; shift 2 ;;
@@ -137,31 +131,15 @@ check_deps() {
     command -v qemu-img >/dev/null 2>&1 || missing+=(qemu-img)
     command -v expect >/dev/null 2>&1 || missing+=(expect)
 
-    if [[ "$FIRMWARE" == "uefi" ]]; then
-        if [[ ! -f /usr/share/OVMF/OVMF_CODE.fd ]] && [[ ! -f /usr/share/edk2/ovmf/OVMF_CODE.fd ]] && [[ ! -f /usr/share/qemu/OVMF.fd ]]; then
-            missing+=("OVMF firmware (install: sudo apt install ovmf)")
-        fi
-    fi
-
     if [[ ${#missing[@]} -gt 0 ]]; then
         echo "ERROR: Missing dependencies:"
         for m in "${missing[@]}"; do
             echo "  - $m"
         done
         echo ""
-        echo "Install with: sudo apt install qemu-system-x86 qemu-utils expect ovmf"
+        echo "Install with: sudo apt install qemu-system-x86 qemu-utils expect"
         exit 1
     fi
-}
-
-get_ovmf_path() {
-    for f in /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd /usr/share/qemu/OVMF.fd; do
-        if [[ -f "$f" ]]; then
-            echo "$f"
-            return
-        fi
-    done
-    echo ""
 }
 
 create_disk() {
@@ -210,15 +188,6 @@ start_kvm() {
     shift
     local extra_args=("$@")
 
-    local bios_arg=()
-    if [[ "$FIRMWARE" == "uefi" ]]; then
-        local ovmf
-        ovmf=$(get_ovmf_path)
-        if [[ -n "$ovmf" ]]; then
-            bios_arg=(-bios "$ovmf")
-        fi
-    fi
-
     local cdrom_arg=()
     if [[ "${ONIE_ISO:-}" && "$boot_order" == cd* ]]; then
         cdrom_arg=(-cdrom "$ONIE_ISO")
@@ -226,13 +195,12 @@ start_kvm() {
 
     local disk_arg=(-drive "file=$DISK,media=disk,if=virtio,index=0")
 
-    echo "Starting KVM VM (mem=${MEM}MB, firmware=${FIRMWARE}, serial=telnet:$KVM_PORT)..."
+    echo "Starting KVM VM (mem=${MEM}MB, serial=telnet:$KVM_PORT)..."
 
     qemu-system-x86_64 \
         -m "$MEM" \
         -name "onie" \
         -boot "order=$boot_order" \
-        "${bios_arg[@]}" \
         "${cdrom_arg[@]}" \
         "${disk_arg[@]}" \
         "${extra_args[@]}" \
@@ -630,7 +598,6 @@ do_test() {
     echo "========================================="
     echo "  ONIE ISO:      $(basename "${ONIE_ISO:-N/A}")"
     echo "  Installer:     $(basename "${INSTALLER:-N/A}")"
-    echo "  Firmware:      $FIRMWARE"
     echo "  Memory:        ${MEM}MB"
     echo "  Disk:          ${DISK_SIZE}GB"
     echo "  Target disk:   $DISK"
