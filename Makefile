@@ -7,9 +7,7 @@ PART_SIZE_MB ?= 4096
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
 GIT_REV ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
-SERIES ?= resolute
 PPA_NAME ?= henrymao/ubuntu-nos
-PPA_URL ?= https://ppa.launchpadcontent.net/$(PPA_NAME)/ubuntu
 LIBSAIBCM_URL ?= https://packages.trafficmanager.net/public/sai/sai-broadcom/SAI_11.2.0_GA-202405/11.2.30.5/xgs/libsaibcm_11.2.30.5_amd64.deb
 
 IMAGE_NAME ?= $(NOS_NAME)-$(NOS_VERSION)-$(ARCH)-installer.bin
@@ -48,15 +46,13 @@ image: build/stamps/image
 # Download all .deb packages for staging into rootfs via image-definition copy-file
 build/stamps/download-debs: | build/stamps build/debs
 	$(Q)echo "==== Downloading deb packages ===="
+	$(Q)echo "  Adding PPA $(PPA_NAME) to build host..."
+	$(Q)sudo add-apt-repository -y ppa:$(PPA_NAME)
+	$(Q)sudo apt-get update -qq
 	$(Q)echo "  Downloading libsaibcm..."
 	$(Q)curl --fail -o "build/debs/libsaibcm.deb" "$(LIBSAIBCM_URL)"
-	$(Q)curl -sL "https://ppa.launchpadcontent.net/$(PPA_NAME)/ubuntu/dists/$(SERIES)/main/binary-amd64/Packages.gz" | gunzip > build/debs/Packages
-	$(Q)for pkg in platform-modules-s5232f opennsl-modules; do \
-		relpath=$$(awk -v p="$$pkg" '$$1=="Package:" && $$2==p {f=1} f && $$1=="Filename:" {print $$2; exit}' build/debs/Packages); \
-		echo "  Downloading $$pkg..."; \
-		curl --fail -o "build/debs/$$pkg.deb" "$(PPA_URL)/$$relpath"; \
-	done
-	$(Q)rm -f build/debs/Packages
+	$(Q)echo "  Downloading platform packages..."
+	$(Q)cd build/debs && apt-get download platform-modules-s5232f opennsl-modules
 	$(Q)touch $@
 
 # Step 1: Run ubuntu-image classic to build the complete rootfs tarball
