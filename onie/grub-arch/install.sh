@@ -232,7 +232,7 @@ if [ "\${onie_entry}" ]; then
 fi
 EOF
 
-nos_menuentry="${nos_name} NOS ${git_branch:-} ${git_rev:-}"
+nos_menuentry="${nos_name} NOS ${nos_version:-}"
 cat <<EOF >> $grub_cfg
 menuentry '${nos_menuentry}' --unrestricted {
         search --no-floppy --label --set=root $volume_label
