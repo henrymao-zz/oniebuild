@@ -49,26 +49,6 @@ make vm-install   # Install ONIE image onto VM
 make vm-run       # Boot installed NOS interactively
 ```
 
-## Configuration
-
-Edit `config.mk` or override via environment variables:
-
-```makefile
-# Architecture and OS identity
-ARCH ?= x86_64
-NOS_NAME ?= Ubuntu
-NOS_VERSION ?= 1.0.0
-
-# Bootloader and partition
-BOOTLOADER ?= grub
-PART_SIZE_MB ?= 4096
-
-# VM testing
-VM_MEM ?= 4096
-VM_DISK_SIZE ?= 40
-VM_FIRMWARE ?= bios
-```
-
 ## Directory Layout
 
 ```
@@ -78,14 +58,13 @@ oniebuild/
   image-definition.yaml       # ubuntu-image classic input (seed, packages, cloud-init)
   build-onie.sh               # ONIE installer image packaging
   test-vm.sh                  # KVM VM testing
-  scripts/
-    strip-rootfs.sh           # Chroot rootfs optimization (firmware/module/binary pruning)
-  installer/
+  strip-rootfs.sh           # Chroot rootfs optimization (firmware/module/binary pruning)
+  onie/
     sharch_body.sh            # Self-extracting archive template
     grub-arch/                # GRUB installer (x86_64)
       install.sh              # ONIE partition/fs/GRUB setup
       grub.cfg                # GRUB stage-1 config
-  files/
+  runtime/
     firstboot.sh              # First-boot setup (cloud-init runcmd)
   build/                      # Output directory (gitignored)
     ubuntu-nos-rootfs.tar.gz  # Rootfs tarball (from ubuntu-image)

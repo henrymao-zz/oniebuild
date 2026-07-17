@@ -1,10 +1,31 @@
-include config.mk
+# ONIE build setting
+NOS_NAME ?= Ubuntu
+NOS_VERSION ?= 1.0.0
+ARCH ?= x86_64
+BOOTLOADER ?= grub
+PART_SIZE_MB ?= 4096
 
-STAMPDIR ?= $(BUILDDIR)/stamps
-UI_WORKDIR ?= $(BUILDDIR)/ui-workdir
-FILES_DIR ?= $(BUILDDIR)/debs
+GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
+GIT_REV ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
-.PHONY: all rootfs image vm-create vm-install vm-run vm-test clean distclean help
+SERIES ?= resolute
+PPA_NAME ?= henrymao/ubuntu-nos
+PPA_URL ?= https://ppa.launchpadcontent.net/$(PPA_NAME)/ubuntu
+LIBSAIBCM_URL ?= https://packages.trafficmanager.net/public/sai/sai-broadcom/SAI_11.2.0_GA-202405/11.2.30.5/xgs/libsaibcm_11.2.30.5_amd64.deb
+
+IMAGE_NAME ?= $(NOS_NAME)-$(NOS_VERSION)-$(ARCH)-installer.bin
+
+# VM Testing Target setting
+ONIE_ISO_URL ?= https://packages.trafficmanager.net/public/onie/onie-recovery-x86_64-kvm_x86_64-r0.iso
+ONIE_ISO ?= build/vm/onie-recovery-x86_64-kvm_x86_64-r0.iso
+VM_MEM ?= 2048
+VM_DISK_SIZE ?= 40
+VM_FIRMWARE ?= bios
+VM_KVM_PORT ?= 9000
+VM_SSH_PORT ?= 3041
+
+
+.PHONY: all image vm-create vm-install vm-run vm-test clean distclean help
 
 all: image
 
@@ -17,12 +38,6 @@ help:
 	@echo "  clean     - Remove build artifacts (keep downloads)"
 	@echo "  distclean - Remove everything including downloads"
 	@echo ""
-	@echo " — override via environment variables):"
-	@echo "  NOS_NAME          - Network OS name [$(NOS_NAME)]"
-	@echo "  NOS_VERSION       - Network OS version [$(NOS_VERSION)]"
-	@echo "  BOOTLOADER        - Bootloader type: grub or uboot [$(BOOTLOADER)]"
-	@echo "  PART_SIZE_MB      - Install partition size in MB [$(PART_SIZE_MB)]"
-	@echo "  V                 - Verbose output (1=on, 0=off) [$(V)]"
 	@echo ""
 	@echo "VM Testing Targets (require ONIE recovery ISO):"
 	@echo "  vm-create   - Create KVM VM with ONIE installed from recovery ISO"
@@ -30,80 +45,71 @@ help:
 	@echo "  vm-run      - Boot the installed NOS image in the VM"
 	@echo "  vm-test     - Full pipeline: create -> install NOS -> verify boot"
 	@echo ""
-	@echo "VM Configuration:"
-	@echo "  ONIE_ISO    - Path to ONIE recovery ISO (KVM x86_64) [$(ONIE_ISO)]"
-	@echo "  VM_MEM      - VM memory in MB [$(VM_MEM)]"
-	@echo "  VM_DISK_SIZE - VM disk size in GB [$(VM_DISK_SIZE)]"
-	@echo "  VM_FIRMWARE - Boot firmware: bios or uefi [$(VM_FIRMWARE)]"
-	@echo "  VM_KVM_PORT - KVM serial console telnet port [$(VM_KVM_PORT)]"
-	@echo "  VM_SSH_PORT - Host SSH forwarding port [$(VM_SSH_PORT)]"
 
-rootfs: $(STAMPDIR)/ubuntu-image
-
-image: $(STAMPDIR)/image
+image: build/stamps/image
 
 # Download all .deb packages for staging into rootfs via image-definition copy-file
-$(STAMPDIR)/download-debs: | $(STAMPDIR) $(FILES_DIR)
+build/stamps/download-debs: | build/stamps build/debs
 	$(Q)echo "==== Downloading deb packages ===="
 	$(Q)echo "  Downloading libsaibcm..."
-	$(Q)curl --retry 5 --retry-delay 3 --retry-all-errors -fSL -o "$(FILES_DIR)/libsaibcm.deb" "$(LIBSAIBCM_URL)"
-	$(Q)curl -sL "https://ppa.launchpadcontent.net/$(PPA_NAME)/ubuntu/dists/$(SERIES)/main/binary-amd64/Packages.gz" | gunzip > $(FILES_DIR)/Packages
+	$(Q)curl --fail -o "build/debs/libsaibcm.deb" "$(LIBSAIBCM_URL)"
+	$(Q)curl -sL "https://ppa.launchpadcontent.net/$(PPA_NAME)/ubuntu/dists/$(SERIES)/main/binary-amd64/Packages.gz" | gunzip > build/debs/Packages
 	$(Q)for pkg in platform-modules-s5232f opennsl-modules; do \
-		relpath=$$(awk -v p="$$pkg" '$$1=="Package:" && $$2==p {f=1} f && $$1=="Filename:" {print $$2; exit}' $(FILES_DIR)/Packages); \
+		relpath=$$(awk -v p="$$pkg" '$$1=="Package:" && $$2==p {f=1} f && $$1=="Filename:" {print $$2; exit}' build/debs/Packages); \
 		echo "  Downloading $$pkg..."; \
-		curl --retry 5 --retry-delay 3 --retry-all-errors -fSL -o "$(FILES_DIR)/$$pkg.deb" "$(PPA_URL)/$$relpath"; \
+		curl --fail -o "build/debs/$$pkg.deb" "$(PPA_URL)/$$relpath"; \
 	done
-	$(Q)rm -f $(FILES_DIR)/Packages
+	$(Q)rm -f build/debs/Packages
 	$(Q)touch $@
 
 # Step 1: Run ubuntu-image classic to build the complete rootfs tarball
-$(STAMPDIR)/ubuntu-image: image-definition.yaml $(STAMPDIR)/download-debs | $(STAMPDIR) $(BUILDDIR)
+build/stamps/ubuntu-image: image-definition.yaml build/stamps/download-debs | build/stamps build
 	$(Q)echo "==== Building rootfs via ubuntu-image ===="
 	$(Q)sudo ubuntu-image classic \
-		-w "$(UI_WORKDIR)" \
-		-O "$(BUILDDIR)" \
-		$(UI_DEBUG) \
+		-w build/.ubuntu-image \
+		-O "build" \
 		image-definition.yaml
 	$(Q)touch $@
 
 # Step 2: Package into ONIE installer image
-$(STAMPDIR)/image: $(STAMPDIR)/ubuntu-image | $(STAMPDIR) $(BUILDDIR)
+build/stamps/image: build/stamps/ubuntu-image | build/stamps build
 	$(Q)echo "==== Creating ONIE installer image ===="
 	$(Q)sudo ./build-onie.sh \
 		--arch "$(ARCH)" \
 		--bootloader "$(BOOTLOADER)" \
-		--rootfs-tarball "$(BUILDDIR)/$(ROOTFS_TARBALL_NAME)" \
+		--rootfs-tarball build/ubuntu-nos-rootfs.tar.gz \
 		--nos-name "$(NOS_NAME)" \
 		--nos-version "$(NOS_VERSION)" \
 		--git-branch "$(GIT_BRANCH)" \
 		--git-rev "$(GIT_REV)" \
 		--part-size "$(PART_SIZE_MB)" \
-		--output "$(BUILDDIR)/$(IMAGE_NAME)"
+		--output "build/$(IMAGE_NAME)"
 	$(Q)touch $@
 
-$(STAMPDIR):
+build/stamps:
 	$(Q)mkdir -p $@
 
-$(BUILDDIR):
+build:
 	$(Q)mkdir -p $@
 
-$(FILES_DIR):
+build/debs:
 	$(Q)mkdir -p $@
 
 clean:
 	$(Q)echo "==== Cleaning build artifacts ===="
-	$(Q)sudo rm -rf $(STAMPDIR) $(UI_WORKDIR) $(FILES_DIR)
-	$(Q)sudo rm -f $(BUILDDIR)/$(IMAGE_NAME) $(BUILDDIR)/*.squashfs $(BUILDDIR)/*.zip
-	$(Q)sudo rm -f $(BUILDDIR)/$(ROOTFS_TARBALL_NAME)
+	$(Q)sudo rm -rf build/stamps $(UI_WORKDIR) build/debs
+	$(Q)sudo rm -f build/$(IMAGE_NAME) build/*.squashfs build/*.zip
+	$(Q)sudo rm -f build/ubuntu-nos-rootfs.tar.gz
+
 distclean: clean
 	$(Q)echo "==== Removing all build data ===="
-	$(Q)sudo rm -rf $(BUILDDIR)
+	$(Q)sudo rm -rf build
 
 vm-create:
 	$(Q)./test-vm.sh create \
 		--onie-iso "$(ONIE_ISO)" \
 		--onie-iso-url "$(ONIE_ISO_URL)" \
-		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
+		--disk "build/vm/onie-disk.qcow2" \
 		--mem "$(VM_MEM)" \
 		--disk-size "$(VM_DISK_SIZE)" \
 		--firmware "$(VM_FIRMWARE)" \
@@ -112,15 +118,15 @@ vm-create:
 
 vm-install:
 	$(Q)./test-vm.sh install \
-		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
-		--installer "$(BUILDDIR)/$(IMAGE_NAME)" \
+		--disk "build/vm/onie-disk.qcow2" \
+		--installer "build/$(IMAGE_NAME)" \
 		--firmware "$(VM_FIRMWARE)" \
 		--kvm-port "$(VM_KVM_PORT)" \
 		--ssh-port "$(VM_SSH_PORT)"
 
 vm-run:
 	$(Q)./test-vm.sh run \
-		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
+		--disk "build/vm/onie-disk.qcow2" \
 		--firmware "$(VM_FIRMWARE)" \
 		--mem "$(VM_MEM)" \
 		--kvm-port "$(VM_KVM_PORT)" \
@@ -130,8 +136,8 @@ vm-test:
 	$(Q)./test-vm.sh test \
 		--onie-iso "$(ONIE_ISO)" \
 		--onie-iso-url "$(ONIE_ISO_URL)" \
-		--installer "$(BUILDDIR)/$(IMAGE_NAME)" \
-		--disk "$(BUILDDIR)/vm/onie-disk.qcow2" \
+		--installer "build/$(IMAGE_NAME)" \
+		--disk "build/vm/onie-disk.qcow2" \
 		--mem "$(VM_MEM)" \
 		--disk-size "$(VM_DISK_SIZE)" \
 		--firmware "$(VM_FIRMWARE)" \
