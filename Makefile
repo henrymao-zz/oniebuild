@@ -48,12 +48,19 @@ build/debs/libsaibcm.deb: | build/debs
 	echo "  Downloading libsaibcm..."
 	curl --fail -o $@ "$(LIBSAIBCM_URL)"
 
-build/debs/opennsl-modules.deb build/debs/platform-modules-s5232f.deb: | build/debs
-	echo "==== Downloading platform packages ===="
+build/debs/opennsl-modules.deb: | build/debs
+	echo "==== Downloading opennsl-modules ===="
 	sudo add-apt-repository -y ppa:$(PPA_NAME)
 	sudo apt-get update -qq
-	cd build/debs && apt-get download platform-modules-s5232f opennsl-modules
-	test -f $@
+	cd build/debs && apt-get download opennsl-modules
+	mv build/debs/opennsl-modules_*.deb $@
+
+build/debs/platform-modules-s5232f.deb: | build/debs
+	echo "==== Downloading platform-modules-s5232f ===="
+	sudo add-apt-repository -y ppa:$(PPA_NAME)
+	sudo apt-get update -qq
+	cd build/debs && apt-get download platform-modules-s5232f
+	mv build/debs/platform-modules-s5232f_*.deb $@
 
 # Build rootfs tarball via ubuntu-image classic.
 build/stamps/ubuntu-image: image-definition.yaml build/stamps/download-debs | build/stamps build
