@@ -66,7 +66,7 @@ case "$ONIE_PLATFORM" in
     x86_64-dellemc_s5232f_c3538-r0)
         echo "firstboot: installing platform-modules-s5232f from $PLATFORM_DIR..."
         if ls "$PLATFORM_DIR"/platform-modules-s5232f*.deb >/dev/null 2>&1; then
-            dpkg -i "$PLATFORM_DIR"/platform-modules-s5232f*.deb
+            dpkg -i --force-overwrite "$PLATFORM_DIR"/platform-modules-s5232f*.deb
         else
             echo "firstboot: WARNING, no platform-modules .deb found in $PLATFORM_DIR"
         fi
