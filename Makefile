@@ -21,7 +21,7 @@ VM_DISK_SIZE ?= 40
 VM_KVM_PORT ?= 9000
 VM_SSH_PORT ?= 3041
 
-.PHONY: all clean distclean help image vm-create vm-install vm-run vm-test
+.PHONY: all clean distclean help image download-debs vm-create vm-install vm-run vm-test
 
 all: image  # Build the ONIE installer image (default)
 
@@ -34,42 +34,34 @@ help:  # Display this help
 	@awk -F'#' '/^[a-z0-9-]+:/ { sub(":.*", "", $$1); if ($$2 != "") print " ", $$1, "#", $$2 }' Makefile | column -t -s '#'
 
 # --------------------------------------------------------------------------
-# Build pipeline (stamp-file based, incremental)
+# Build pipeline (artifact-based, incremental)
 # --------------------------------------------------------------------------
-image: build/stamps/image  # Build the ONIE installer image
+image: build/$(IMAGE_NAME)  # Build the ONIE installer image
 
 # Download platform .deb packages for staging into the rootfs.
-DEB_FILES := build/debs/libsaibcm.deb build/debs/opennsl-modules.deb build/debs/platform-modules-s5232f.deb
+download-debs: build/debs/libsaibcm.deb build/debs/opennsl-modules.deb build/debs/platform-modules-s5232f.deb
 
-build/stamps/download-debs: $(DEB_FILES) | build/stamps
-	@touch $@
-
-build/debs/libsaibcm.deb: | build/debs
-	echo "  Downloading libsaibcm..."
+build/debs/libsaibcm.deb:
+	mkdir -p build/debs
 	curl --fail -o $@ "$(LIBSAIBCM_URL)"
 
-build/debs/opennsl-modules.deb: | build/debs
-	echo "==== Downloading opennsl-modules ===="
+build/debs/opennsl-modules.deb build/debs/platform-modules-s5232f.deb &:
+	mkdir -p build/debs
 	sudo add-apt-repository -y ppa:$(PPA_NAME)
 	sudo apt-get update -qq
-	cd build/debs && apt-get download opennsl-modules
-	mv build/debs/opennsl-modules_*.deb $@
-
-build/debs/platform-modules-s5232f.deb: | build/debs
-	echo "==== Downloading platform-modules-s5232f ===="
-	sudo add-apt-repository -y ppa:$(PPA_NAME)
-	sudo apt-get update -qq
-	cd build/debs && apt-get download platform-modules-s5232f
-	mv build/debs/platform-modules-s5232f_*.deb $@
+	cd build/debs && apt-get download opennsl-modules platform-modules-s5232f
+	mv build/debs/opennsl-modules_*.deb build/debs/opennsl-modules.deb
+	mv build/debs/platform-modules-s5232f_*.deb build/debs/platform-modules-s5232f.deb
 
 # Build rootfs tarball via ubuntu-image classic.
-build/stamps/ubuntu-image: image-definition.yaml build/stamps/download-debs | build/stamps build
+build/ubuntu-nos-rootfs.tar.gz: image-definition.yaml build/debs/libsaibcm.deb build/debs/opennsl-modules.deb build/debs/platform-modules-s5232f.deb
+	@mkdir -p build
 	echo "==== Building rootfs via ubuntu-image ===="
 	sudo ubuntu-image classic -w build/.ubuntu-image -O build image-definition.yaml
-	touch $@
 
 # Package rootfs tarball into the ONIE self-extracting installer.
-build/stamps/image: build/stamps/ubuntu-image | build/stamps build
+build/$(IMAGE_NAME): build/ubuntu-nos-rootfs.tar.gz
+	@mkdir -p build
 	echo "==== Creating ONIE installer image ===="
 	./build-onie.sh \
 		--arch "$(ARCH)" \
@@ -80,20 +72,12 @@ build/stamps/image: build/stamps/ubuntu-image | build/stamps build
 		--git-rev "$(GIT_REV)" \
 		--part-size "$(PART_SIZE_MB)" \
 		--output "build/$(IMAGE_NAME)"
-	touch $@
-
-build/stamps:
-	mkdir -p $@
-build:
-	mkdir -p $@
-build/debs:
-	mkdir -p $@
 
 # --------------------------------------------------------------------------
 # Cleanup
 # --------------------------------------------------------------------------
 clean:  # Remove build artifacts (keep VM disks)
-	sudo rm -rf build/stamps build/.ubuntu-image build/debs
+	sudo rm -rf build/.ubuntu-image build/debs
 	sudo rm -f build/$(IMAGE_NAME) build/*.squashfs build/*.zip
 	sudo rm -f build/ubuntu-nos-rootfs.tar.gz
 

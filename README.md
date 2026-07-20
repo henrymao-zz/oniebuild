@@ -19,7 +19,9 @@ ubuntu-image classic → build-onie
 ```
 
 1. **ubuntu-image classic** — Bootstraps rootfs from `server-minimal` seed, installs packages from `image-definition.yaml` (kernel, extra-packages, cloud-init, platform debs, strip)
-2. **build-onie** — Package rootfs tarball into ONIE self-extracting `.bin`
+2. **build-onie** — Packages rootfs tarball into ONIE self-extracting `.bin`
+
+Build is artifact-based and incremental: Make tracks real outputs (`build/debs/*.deb` → `build/ubuntu-nos-rootfs.tar.gz` → `build/$(IMAGE_NAME)`) and rebuilds only when prerequisites change.
 
 ## Dependencies
 
@@ -39,6 +41,9 @@ sudo apt install -y qemu-system-x86 qemu-utils expect
 ```bash
 # Build the ONIE installer image
 make image
+
+# Download platform .deb packages only
+make download-debs
 
 # Full VM test (builds ONIE disk, installs NOS, verifies boot)
 make vm-test
@@ -66,9 +71,10 @@ oniebuild/
   runtime/
     firstboot.sh              # First-boot setup (cloud-init runcmd)
   build/                      # Output directory (gitignored)
-    ubuntu-nos-rootfs.tar.gz  # Rootfs tarball (from ubuntu-image)
-    Ubuntu-*-installer.bin    # Final installer image
-    vm/                       # VM disk images
+    debs/                      # Downloaded platform .deb packages
+    ubuntu-nos-rootfs.tar.gz   # Rootfs tarball (from ubuntu-image)
+    Ubuntu-*-installer.bin     # Final installer image
+    vm/                        # VM disk images
 ```
 
 ## Image Optimization
