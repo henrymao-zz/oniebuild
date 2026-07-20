@@ -39,16 +39,21 @@ help:  # Display this help
 image: build/stamps/image  # Build the ONIE installer image
 
 # Download platform .deb packages for staging into the rootfs.
-build/stamps/download-debs: | build/stamps build/debs
-	echo "==== Downloading deb packages ===="
-	echo "  Adding PPA $(PPA_NAME) to build host..."
+DEB_FILES := build/debs/libsaibcm.deb build/debs/opennsl-modules.deb build/debs/platform-modules-s5232f.deb
+
+build/stamps/download-debs: $(DEB_FILES) | build/stamps
+	@touch $@
+
+build/debs/libsaibcm.deb: | build/debs
+	echo "  Downloading libsaibcm..."
+	curl --fail -o $@ "$(LIBSAIBCM_URL)"
+
+build/debs/opennsl-modules.deb build/debs/platform-modules-s5232f.deb: | build/debs
+	echo "==== Downloading platform packages ===="
 	sudo add-apt-repository -y ppa:$(PPA_NAME)
 	sudo apt-get update -qq
-	echo "  Downloading libsaibcm..."
-	curl --fail -o build/debs/libsaibcm.deb "$(LIBSAIBCM_URL)"
-	echo "  Downloading platform packages..."
 	cd build/debs && apt-get download platform-modules-s5232f opennsl-modules
-	touch $@
+	test -f $@
 
 # Build rootfs tarball via ubuntu-image classic.
 build/stamps/ubuntu-image: image-definition.yaml build/stamps/download-debs | build/stamps build
