@@ -21,7 +21,7 @@ VM_DISK_SIZE ?= 40
 VM_KVM_PORT ?= 9000
 VM_SSH_PORT ?= 3041
 
-.PHONY: all clean distclean help image download-debs vm-create vm-install vm-run vm-test
+.PHONY: all clean help image download-debs vm-create vm-install vm-run vm-test
 
 all: image  # Build the ONIE installer image (default)
 
@@ -29,7 +29,7 @@ all: image  # Build the ONIE installer image (default)
 # Help
 # --------------------------------------------------------------------------
 help:  # Display this help
-	@echo "Usage: make [target] [ARGS='...']\n"
+	@echo "Usage: make [target]\n"
 	@echo "Targets:"
 	@awk -F'#' '/^[a-z0-9-]+:/ { sub(":.*", "", $$1); if ($$2 != "") print " ", $$1, "#", $$2 }' Makefile | column -t -s '#'
 
@@ -76,12 +76,7 @@ build/$(IMAGE_NAME): build/ubuntu-nos-rootfs.tar.gz
 # --------------------------------------------------------------------------
 # Cleanup
 # --------------------------------------------------------------------------
-clean:  # Remove build artifacts (keep VM disks)
-	sudo rm -rf build/.ubuntu-image build/debs
-	sudo rm -f build/$(IMAGE_NAME) build/*.squashfs build/*.zip
-	sudo rm -f build/ubuntu-nos-rootfs.tar.gz
-
-distclean: clean  # Remove everything including build dir and VM disks
+clean:  # Remove everything including build dir and VM disks
 	sudo rm -rf build
 
 # --------------------------------------------------------------------------

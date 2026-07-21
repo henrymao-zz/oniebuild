@@ -55,7 +55,7 @@ echo "Packaging ONIE installer image..."
 echo "  Kernel version: $KVER"
 echo "  Architecture:   $ARCH"
 
-TMP_DIR=$(mktemp -d)
+TMP_DIR=$(mktemp -d -p "${TMPDIR:-/var/tmp}")
 trap 'rm -rf $TMP_DIR' EXIT
 
 INSTALLER_TMP="$TMP_DIR/installer"

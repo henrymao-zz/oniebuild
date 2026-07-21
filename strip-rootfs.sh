@@ -80,7 +80,4 @@ for kdir in /lib/modules/*; do
     depmod -a "$kver" 2>/dev/null || true
 done
 
-# Clean up
-rm -f /tmp/strip-rootfs.sh 2>/dev/null || true
-
 echo "==== Rootfs strip complete ===="

@@ -64,8 +64,6 @@ if [ "$firmware" = "uefi" ] ; then
     create_onie_partition="create_onie_uefi_partition"
 elif [ "$onie_partition_type" = "gpt" ] ; then
     create_onie_partition="create_onie_gpt_partition"
-elif [ "$onie_partition_type" = "msdos" ] ; then
-    create_onie_partition="create_onie_msdos_partition"
 else
     echo "ERROR: Unsupported partition type: $onie_partition_type"
     exit 1
@@ -87,28 +85,6 @@ create_onie_gpt_partition()
     echo ${blk_dev} | grep -q nvme && blk_suffix="p"
     sgdisk --new=${onie_part}::+${onie_part_size}MB \
         --change-name=${onie_part}:$volume_label $blk_dev || { echo "Error: Unable to create partition"; exit 1; }
-    partprobe 2>/dev/null || true
-}
-
-create_onie_msdos_partition()
-{
-    blk_dev="$1"
-    part_info="$(blkid | grep $volume_label | awk -F: '{print $1}')"
-    if [ -n "$part_info" ] ; then
-        onie_part="$(echo -n $part_info | sed -e s#${blk_dev}##)"
-        parted -s $blk_dev rm $onie_part || { echo "Error: Unable to delete partition"; exit 1; }
-        partprobe 2>/dev/null || true
-    fi
-    last_part_info="$(parted -s -m $blk_dev unit s print | tail -n 1)"
-    last_part_num="$(echo -n $last_part_info | awk -F: '{print $1}')"
-    last_part_end="$(echo -n $last_part_info | awk -F: '{print $3}')"
-    last_part_end=${last_part_end%s}
-    onie_part=$((last_part_num + 1))
-    onie_part_start=$((last_part_end + 1))
-    sectors_per_mb=2048
-    onie_part_end=$((onie_part_start + (onie_part_size * sectors_per_mb) - 1))
-    parted -s --align optimal $blk_dev unit s \
-        mkpart primary $onie_part_start $onie_part_end set $onie_part boot on || { echo "Error: Unable to create partition"; exit 1; }
     partprobe 2>/dev/null || true
 }
 
@@ -238,7 +214,7 @@ menuentry '${nos_menuentry}' --unrestricted {
         search --no-floppy --label --set=root $volume_label
         echo    'Loading ${nos_menuentry} kernel ...'
         insmod gzio
-        insmod part_msdos
+        insmod part_gpt
         insmod ext2
         linux   /boot/vmlinuz root=LABEL=$volume_label rw $GRUB_CMDLINE_LINUX \$ONIE_EXTRA_CMDLINE_LINUX
         echo    'Loading ${nos_menuentry} initial ramdisk ...'

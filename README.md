@@ -42,9 +42,6 @@ sudo apt install -y qemu-system-x86 qemu-utils expect
 # Build the ONIE installer image
 make image
 
-# Download platform .deb packages only
-make download-debs
-
 # Full VM test (builds ONIE disk, installs NOS, verifies boot)
 make vm-test
 
